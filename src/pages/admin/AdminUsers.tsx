@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTeams } from "@/hooks/useTeams";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Plus, UserPlus, Users, Shield, Search, Loader2, Trash2, AlertCircle } from "lucide-react";
+import { Plus, UserPlus, Users, Shield, Search, Loader2, Trash2, AlertCircle, Upload, Download, FileSpreadsheet } from "lucide-react";
 
 // Type for team members (TL/DSR) - simple tracking entries, no login required
 type MemberRole = "team_leader" | "dsr";
@@ -35,7 +35,11 @@ const AdminUsers = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkRows, setBulkRows] = useState<{ name: string; phone: string; role: MemberRole; team: string }[]>([]);
+  const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   
   // New member form state (simplified - no auth needed)
   const [newMemberName, setNewMemberName] = useState("");
@@ -183,6 +187,183 @@ const AdminUsers = () => {
     toast({ title: "Member Removed", description: `${member?.name} has been removed.` });
   };
 
+  // Download sample CSV template
+  const downloadTemplate = () => {
+    const headers = "name,phone,role,team";
+    const sampleRows = [
+      "John Doe,+255712345678,dsr,Team Alpha",
+      "Jane Smith,+255787654321,team_leader,Team Beta",
+      "Mike Wilson,,dsr,",
+    ];
+    const csvContent = [headers, ...sampleRows].join("\n");
+    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "dsr_upload_template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    
+    toast({ title: "Template Downloaded", description: "Fill in the CSV and upload it." });
+  };
+
+  // Parse CSV line handling quotes
+  const parseCsvLine = (line: string) => {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        const nextChar = line[i + 1];
+        if (inQuotes && nextChar === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === "," && !inQuotes) {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  // Normalize role value
+  const normalizeRole = (value: string): MemberRole | null => {
+    const v = value.trim().toLowerCase();
+    if (["dsr", "d", "sales", "sales rep", "sales representative"].includes(v)) return "dsr";
+    if (["team_leader", "team leader", "tl", "leader", "t"].includes(v)) return "team_leader";
+    return null;
+  };
+
+  // Handle bulk file upload
+  const handleBulkFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setBulkRows([]);
+    setBulkErrors([]);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = (e.target?.result as string) ?? "";
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+
+        if (lines.length < 2) {
+          setBulkErrors(["File must include a header row and at least one data row."]);
+          return;
+        }
+
+        const rawHeaders = parseCsvLine(lines[0]).map(h => h.toLowerCase());
+        const headerAliases: Record<string, string[]> = {
+          name: ["name", "full_name", "full name", "member name"],
+          phone: ["phone", "phone_number", "phone number", "mobile", "contact"],
+          role: ["role", "type", "member_role", "member role"],
+          team: ["team", "team_name", "team name", "assigned_team"],
+        };
+
+        const getValue = (row: string[], key: keyof typeof headerAliases) => {
+          for (const alias of headerAliases[key]) {
+            const index = rawHeaders.indexOf(alias);
+            if (index !== -1) return row[index] ?? "";
+          }
+          return "";
+        };
+
+        const parsed: { name: string; phone: string; role: MemberRole; team: string }[] = [];
+        const errors: string[] = [];
+
+        lines.slice(1).forEach((line, idx) => {
+          const row = parseCsvLine(line);
+          if (row.every(cell => cell.length === 0)) return;
+
+          const name = getValue(row, "name").trim();
+          const phone = getValue(row, "phone").trim();
+          const roleRaw = getValue(row, "role");
+          const team = getValue(row, "team").trim();
+          const role = normalizeRole(roleRaw);
+
+          const rowNum = idx + 2;
+
+          if (!name) {
+            errors.push(`Row ${rowNum}: Name is required.`);
+            return;
+          }
+
+          if (!role) {
+            errors.push(`Row ${rowNum}: Invalid role "${roleRaw}". Use "dsr" or "team_leader".`);
+            return;
+          }
+
+          parsed.push({ name, phone, role, team });
+        });
+
+        setBulkRows(parsed);
+        setBulkErrors(errors);
+      } catch (err) {
+        console.error(err);
+        setBulkErrors(["Failed to parse file. Ensure the file is CSV encoded in UTF-8."]);
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
+  // Process bulk upload
+  const handleBulkUpload = () => {
+    if (bulkRows.length === 0) {
+      toast({ title: "No valid rows to import", variant: "destructive" });
+      return;
+    }
+
+    setBulkUploading(true);
+
+    try {
+      // Build team lookup
+      const teamLookup = new Map<string, string>();
+      teams?.forEach(t => {
+        teamLookup.set(t.name.toLowerCase(), t.id);
+      });
+
+      const newMembers: TeamMember[] = bulkRows.map((row) => {
+        const teamId = row.team ? teamLookup.get(row.team.toLowerCase()) || null : null;
+        
+        return {
+          id: `member_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          name: row.name,
+          phone: row.phone || null,
+          role: row.role,
+          team_id: teamId,
+          created_at: new Date().toISOString(),
+        };
+      });
+
+      const updatedMembers = [...members, ...newMembers];
+      saveMembers(updatedMembers);
+
+      toast({ 
+        title: "Bulk Upload Successful! ✅", 
+        description: `${newMembers.length} members added.` 
+      });
+
+      setBulkRows([]);
+      setBulkErrors([]);
+      setBulkDialogOpen(false);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setBulkUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -191,13 +372,120 @@ const AdminUsers = () => {
           <h1 className="text-2xl font-bold text-foreground">Team Members</h1>
           <p className="text-muted-foreground text-sm">Manage Team Leaders (TL) and DSRs for stock tracking</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90">
-              <UserPlus size={18} /> Add Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="glass border-border/50 sm:max-w-md">
+        <div className="flex items-center gap-2">
+          {/* Bulk Upload Button */}
+          <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <Upload size={18} /> Bulk Upload
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="glass border-border/50 sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <FileSpreadsheet size={20} /> Bulk Upload DSRs/TLs
+                </DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                {/* Download Template Button */}
+                <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-sm">Download Sample Template</p>
+                    <p className="text-xs text-muted-foreground">CSV file with required columns</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={downloadTemplate} className="gap-2">
+                    <Download size={16} /> Template
+                  </Button>
+                </div>
+
+                {/* File Upload */}
+                <div className="grid gap-2">
+                  <Label>Upload CSV File</Label>
+                  <Input 
+                    type="file" 
+                    accept=".csv" 
+                    onChange={handleBulkFile}
+                    disabled={bulkUploading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Required columns: name, phone, role (dsr/team_leader), team
+                  </p>
+                </div>
+
+                {/* Errors */}
+                {bulkErrors.length > 0 && (
+                  <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                    <p className="font-medium text-sm text-destructive mb-2">Errors Found:</p>
+                    <ul className="text-xs text-destructive space-y-1 max-h-32 overflow-y-auto">
+                      {bulkErrors.map((err, i) => (
+                        <li key={i}>• {err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Preview */}
+                {bulkRows.length > 0 && (
+                  <div className="p-3 bg-success/10 border border-success/30 rounded-lg">
+                    <p className="font-medium text-sm text-success mb-2">
+                      Ready to Import: {bulkRows.length} members
+                    </p>
+                    <div className="max-h-40 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-border/50">
+                            <th className="text-left py-1 px-2">Name</th>
+                            <th className="text-left py-1 px-2">Role</th>
+                            <th className="text-left py-1 px-2">Team</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bulkRows.slice(0, 10).map((row, i) => (
+                            <tr key={i} className="border-b border-border/30">
+                              <td className="py-1 px-2">{row.name}</td>
+                              <td className="py-1 px-2">
+                                <Badge variant={row.role === "team_leader" ? "info" : "success"} className="text-xs">
+                                  {row.role === "team_leader" ? "TL" : "DSR"}
+                                </Badge>
+                              </td>
+                              <td className="py-1 px-2 text-muted-foreground">{row.team || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {bulkRows.length > 10 && (
+                        <p className="text-xs text-muted-foreground text-center mt-2">
+                          +{bulkRows.length - 10} more rows
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button 
+                  onClick={handleBulkUpload} 
+                  disabled={bulkUploading || bulkRows.length === 0} 
+                  className="gap-2"
+                >
+                  {bulkUploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                  {bulkUploading ? "Uploading..." : `Import ${bulkRows.length} Members`}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Add Member Button */}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90">
+                <UserPlus size={18} /> Add Member
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="glass border-border/50 sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <UserPlus size={20} /> Add Team Member
@@ -260,6 +548,7 @@ const AdminUsers = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Stats Cards */}
