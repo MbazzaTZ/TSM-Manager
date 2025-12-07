@@ -580,8 +580,10 @@ const AdminInventory = () => {
 
   const normaliseType = (value: string): StockType | null => {
     const normalised = value.trim().toLowerCase();
-    if (["full_set", "full set", "fs"].includes(normalised)) return "full_set";
-    if (["decoder_only", "decoder only", "do"].includes(normalised)) return "decoder_only";
+    // Full Set variations
+    if (["full_set", "full set", "full", "fs", "fullset", "f"].includes(normalised)) return "full_set";
+    // Decoder Only variations
+    if (["decoder_only", "decoder only", "decoder", "do", "decoderonly", "d"].includes(normalised)) return "decoder_only";
     return null;
   };
 
