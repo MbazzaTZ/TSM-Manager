@@ -507,6 +507,7 @@ const Dashboard = () => {
             <LeaderboardCard
               title={t("dashboard.leaderboard")}
               items={leaderboard || []}
+              showTarget={true}
             />
           </div>
         </div>

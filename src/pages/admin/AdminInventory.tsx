@@ -48,6 +48,8 @@ import {
   UserCheck,
   Users,
   Edit,
+  Filter,
+  X,
 } from "lucide-react";
 import { addPendingUpdate, getPendingUpdates } from "./AdminVerification";
 
@@ -101,6 +103,9 @@ const AdminInventory = () => {
   const dsrs = members.filter((m: any) => m.role === "dsr");
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterByTL, setFilterByTL] = useState("");
+  const [filterByRegion, setFilterByRegion] = useState("");
+  const [filterByStatus, setFilterByStatus] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
   const [isParsingBulk, setIsParsingBulk] = useState(false);
@@ -195,17 +200,45 @@ const AdminInventory = () => {
   };
 
   const filteredInventory = useMemo(() => {
+    let result = inventory;
+    
+    // Search filter
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return inventory;
-    return inventory.filter((item) => {
-      return (
-        item.smartcard?.toLowerCase().includes(term) ||
-        item.serial_number?.toLowerCase().includes(term) ||
-        item.batch_number?.toLowerCase().includes(term) ||
-        item.regions?.name?.toLowerCase().includes(term)
-      );
-    });
-  }, [inventory, searchTerm]);
+    if (term) {
+      result = result.filter((item) => {
+        return (
+          item.smartcard?.toLowerCase().includes(term) ||
+          item.serial_number?.toLowerCase().includes(term) ||
+          item.batch_number?.toLowerCase().includes(term) ||
+          item.regions?.name?.toLowerCase().includes(term) ||
+          item.assigned_to_tl?.toLowerCase().includes(term) ||
+          item.assigned_to_dsr?.toLowerCase().includes(term)
+        );
+      });
+    }
+    
+    // Filter by TL
+    if (filterByTL) {
+      const tl = teamLeaders.find((t: any) => t.id === filterByTL);
+      if (tl) {
+        result = result.filter((item) => 
+          item.assigned_to_tl?.toLowerCase() === tl.name.toLowerCase()
+        );
+      }
+    }
+    
+    // Filter by Region
+    if (filterByRegion) {
+      result = result.filter((item) => item.region_id === filterByRegion);
+    }
+    
+    // Filter by Status
+    if (filterByStatus) {
+      result = result.filter((item) => item.status === filterByStatus);
+    }
+    
+    return result;
+  }, [inventory, searchTerm, filterByTL, filterByRegion, filterByStatus, teamLeaders]);
 
   const totalStock = inventory.length;
   const totalAvailable = stats?.available ?? inventory.filter((item) => item.status === "in_store").length;
@@ -1024,6 +1057,70 @@ const AdminInventory = () => {
                 className="pl-9"
               />
             </div>
+          </div>
+
+          {/* Filters Row */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Filter className="h-4 w-4" />
+              <span>Filter:</span>
+            </div>
+            
+            {/* Filter by TL */}
+            <Select value={filterByTL} onValueChange={setFilterByTL}>
+              <SelectTrigger className="w-[160px] h-8">
+                <SelectValue placeholder="All TLs" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All TLs</SelectItem>
+                {teamLeaders.map((tl: any) => (
+                  <SelectItem key={tl.id} value={tl.id}>{tl.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            {/* Filter by Region */}
+            <Select value={filterByRegion} onValueChange={setFilterByRegion}>
+              <SelectTrigger className="w-[160px] h-8">
+                <SelectValue placeholder="All Regions" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Regions</SelectItem>
+                {regions.map((region) => (
+                  <SelectItem key={region.id} value={region.id}>{region.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            {/* Filter by Status */}
+            <Select value={filterByStatus} onValueChange={setFilterByStatus}>
+              <SelectTrigger className="w-[140px] h-8">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Status</SelectItem>
+                <SelectItem value="in_store">In Store</SelectItem>
+                <SelectItem value="in_hand">In Hand</SelectItem>
+                <SelectItem value="sold">Sold</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            {/* Clear Filters */}
+            {(filterByTL || filterByRegion || filterByStatus) && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 px-2"
+                onClick={() => {
+                  setFilterByTL("");
+                  setFilterByRegion("");
+                  setFilterByStatus("");
+                }}
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            )}
           </div>
 
           {/* Bulk Actions */}

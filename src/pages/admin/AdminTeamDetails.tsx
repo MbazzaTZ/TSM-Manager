@@ -33,6 +33,10 @@ import {
   Loader2,
   UserMinus,
   Phone,
+  Target,
+  TrendingDown,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -97,26 +101,71 @@ const AdminTeamDetails = () => {
     return users?.filter((u) => !u.team_id && (u.role === "dsr" || u.role === "team_leader")) || [];
   }, [users]);
 
-  // Team stats
+  // Team stats - calculate based on actual inventory and sales data
   const teamStats = useMemo(() => {
-    const teamUserIds = teamMembers.map((m) => m.user_id);
-    const teamSales = sales?.filter((s) => teamUserIds.includes(s.sold_by_user_id)) || [];
-    const teamStock = inventory?.filter((i) => i.assigned_to_team_id === teamId) || [];
+    // Get TLs in this team from local storage
+    const teamTLs = localMembers.filter((m: any) => m.role === "team_leader");
+    const teamTLNames = teamTLs.map((tl: any) => tl.name.toLowerCase());
+    
+    // Get all inventory assigned to TLs in this team
+    const teamInventory = inventory?.filter((item) => 
+      item.assigned_to_tl && teamTLNames.includes(item.assigned_to_tl.toLowerCase())
+    ) || [];
+    
+    // Stock metrics
+    const stockReceived = teamInventory.length;
+    const stockInHand = teamInventory.filter((i) => i.status === "in_hand").length;
+    const stockSold = teamInventory.filter((i) => i.status === "sold").length;
+    
+    // Get sales data for team inventory
+    const teamInventoryIds = teamInventory.map((i) => i.id);
+    const teamSales = sales?.filter((s) => teamInventoryIds.includes(s.inventory_id)) || [];
     const paidSales = teamSales.filter((s) => s.is_paid).length;
     const unpaidSales = teamSales.filter((s) => !s.is_paid).length;
+    
+    // Calculate conversion rate
+    const conversionRate = stockReceived > 0 
+      ? Math.round((stockSold / stockReceived) * 100) 
+      : 0;
+    
+    // Get sales targets and calculate monthly performance
+    let salesTargets: Record<string, number> = {};
+    try {
+      const stored = localStorage.getItem("tsm_sales_targets");
+      salesTargets = stored ? JSON.parse(stored) : {};
+    } catch {
+      salesTargets = {};
+    }
+    
+    // Monthly target (sum of all TL targets)
+    const monthlyTarget = teamTLs.reduce((sum: number, tl: any) => {
+      return sum + (salesTargets[tl.id] || 20);
+    }, 0);
+    
+    // Monthly actual sales
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthlySales = teamSales.filter((s) => new Date(s.created_at) >= startOfMonth);
+    const monthlyActual = monthlySales.length;
+    const salesGap = monthlyTarget - monthlyActual;
+    const targetProgress = monthlyTarget > 0 ? Math.round((monthlyActual / monthlyTarget) * 100) : 0;
 
     return {
       totalMembers: allMembers.length,
+      totalTLs: teamTLs.length,
+      stockReceived,
+      stockInHand,
+      stockSold,
       totalSales: teamSales.length,
       paidSales,
       unpaidSales,
-      stockInHand: teamStock.filter((i) => i.status === "in_hand").length,
-      stockAvailable: teamStock.filter((i) => i.status === "in_store").length,
-      conversionRate: teamStock.length > 0 
-        ? Math.round((teamSales.length / teamStock.length) * 100) 
-        : 0,
+      conversionRate,
+      monthlyTarget,
+      monthlyActual,
+      salesGap,
+      targetProgress,
     };
-  }, [allMembers, sales, inventory, teamId, teamMembers]);
+  }, [allMembers, sales, inventory, localMembers]);
 
   const handleAddMember = async () => {
     if (!selectedUserId) return;
@@ -244,55 +293,81 @@ const AdminTeamDetails = () => {
             <span className="text-sm text-muted-foreground">Members</span>
           </div>
           <p className="text-2xl font-bold text-foreground">{teamStats.totalMembers}</p>
+          <p className="text-xs text-muted-foreground">{teamStats.totalTLs} TL(s)</p>
         </div>
         <div className="glass rounded-xl p-4 border border-border/50">
           <div className="flex items-center gap-2 mb-2">
-            <ShoppingCart className="w-4 h-4 text-success" />
-            <span className="text-sm text-muted-foreground">Total Sales</span>
+            <Package className="w-4 h-4 text-info" />
+            <span className="text-sm text-muted-foreground">Stock Received</span>
           </div>
-          <p className="text-2xl font-bold text-foreground">{teamStats.totalSales}</p>
+          <p className="text-2xl font-bold text-foreground">{teamStats.stockReceived}</p>
+          <p className="text-xs text-muted-foreground">{teamStats.stockInHand} in hand</p>
         </div>
         <div className="glass rounded-xl p-4 border border-border/50">
           <div className="flex items-center gap-2 mb-2">
-            <Package className="w-4 h-4 text-warning" />
-            <span className="text-sm text-muted-foreground">Stock in Hand</span>
+            <CheckCircle2 className="w-4 h-4 text-success" />
+            <span className="text-sm text-muted-foreground">Stock Sold</span>
           </div>
-          <p className="text-2xl font-bold text-foreground">{teamStats.stockInHand}</p>
+          <p className="text-2xl font-bold text-success">{teamStats.stockSold}</p>
+          <p className="text-xs text-muted-foreground">{teamStats.paidSales} paid</p>
         </div>
         <div className="glass rounded-xl p-4 border border-border/50">
           <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="w-4 h-4 text-info" />
-            <span className="text-sm text-muted-foreground">Conversion</span>
+            <AlertTriangle className="w-4 h-4 text-destructive" />
+            <span className="text-sm text-muted-foreground">Unpaid</span>
           </div>
-          <p className="text-2xl font-bold text-foreground">{teamStats.conversionRate}%</p>
+          <p className="text-2xl font-bold text-destructive">{teamStats.unpaidSales}</p>
+          <p className="text-xs text-muted-foreground">{teamStats.conversionRate}% conversion</p>
         </div>
       </div>
 
-      {/* Sales Progress */}
+      {/* Monthly Target Progress */}
       <div className="glass rounded-xl p-5 border border-border/50">
-        <h3 className="font-semibold text-foreground mb-4">Sales Performance</h3>
-        <div className="space-y-4">
-          <div>
-            <div className="flex justify-between text-sm mb-1">
-              <span className="text-muted-foreground">Paid Sales</span>
-              <span className="text-success font-medium">{teamStats.paidSales}</span>
-            </div>
-            <Progress 
-              value={teamStats.totalSales > 0 ? (teamStats.paidSales / teamStats.totalSales) * 100 : 0} 
-              className="h-2" 
-            />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-primary" />
+            <h3 className="font-semibold text-foreground">Monthly Target Progress</h3>
           </div>
-          <div>
-            <div className="flex justify-between text-sm mb-1">
-              <span className="text-muted-foreground">Unpaid Sales</span>
-              <span className="text-destructive font-medium">{teamStats.unpaidSales}</span>
+          <Badge 
+            variant={teamStats.targetProgress >= 100 ? "success" : teamStats.targetProgress >= 50 ? "warning" : "destructive"}
+          >
+            {teamStats.targetProgress}%
+          </Badge>
+        </div>
+        
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="text-center p-3 bg-secondary/30 rounded-lg">
+            <p className="text-2xl font-bold text-primary">{teamStats.monthlyTarget}</p>
+            <p className="text-xs text-muted-foreground">Target</p>
+          </div>
+          <div className="text-center p-3 bg-secondary/30 rounded-lg">
+            <p className="text-2xl font-bold text-foreground">{teamStats.monthlyActual}</p>
+            <p className="text-xs text-muted-foreground">Actual</p>
+          </div>
+          <div className="text-center p-3 bg-secondary/30 rounded-lg">
+            <div className="flex items-center justify-center gap-1">
+              {teamStats.salesGap > 0 ? (
+                <TrendingDown className="w-4 h-4 text-destructive" />
+              ) : (
+                <TrendingUp className="w-4 h-4 text-success" />
+              )}
+              <p className={cn(
+                "text-2xl font-bold",
+                teamStats.salesGap > 0 ? "text-destructive" : "text-success"
+              )}>
+                {Math.abs(teamStats.salesGap)}
+              </p>
             </div>
-            <Progress 
-              value={teamStats.totalSales > 0 ? (teamStats.unpaidSales / teamStats.totalSales) * 100 : 0} 
-              className="h-2 [&>div]:bg-destructive" 
-            />
+            <p className="text-xs text-muted-foreground">
+              {teamStats.salesGap > 0 ? "Gap" : "Surplus"}
+            </p>
           </div>
         </div>
+        
+        <Progress 
+          value={Math.min(teamStats.targetProgress, 100)} 
+          className="h-3" 
+        />
       </div>
 
       {/* Team Members */}

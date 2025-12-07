@@ -61,6 +61,24 @@ export const useLeaderboard = () => {
         members = [];
       }
 
+      // Get sales targets from localStorage
+      let salesTargets: Record<string, number> = {};
+      try {
+        const stored = localStorage.getItem("tsm_sales_targets");
+        salesTargets = stored ? JSON.parse(stored) : {};
+      } catch {
+        salesTargets = {};
+      }
+
+      // Get default monthly target
+      let defaultTarget = 20;
+      try {
+        const stored = localStorage.getItem("tsm_default_target");
+        defaultTarget = stored ? parseInt(stored, 10) : 20;
+      } catch {
+        defaultTarget = 20;
+      }
+
       // Get regions for display
       const { data: regions } = await supabase.from("regions").select("id, name");
       const regionMap = new Map(regions?.map((r) => [r.id, r.name]) || []);
@@ -70,7 +88,6 @@ export const useLeaderboard = () => {
       
       // Build TL name to ID map from localStorage
       const teamLeaders = members.filter((m) => m.role === "team_leader");
-      const tlNameMap = new Map(teamLeaders.map((tl) => [tl.name.toLowerCase(), tl]));
 
       // Count sales - match by assigned_to_tl field (which stores TL name)
       salesData?.forEach((s: any) => {
@@ -81,20 +98,91 @@ export const useLeaderboard = () => {
         }
       });
 
-      // Build leaderboard
+      // Build leaderboard with targets
       const leaderboard = teamLeaders
-        .map((tl) => ({
-          id: tl.id,
-          name: tl.name,
-          role: "TL" as const,
-          sales: salesCountByTLName[tl.name.toLowerCase()] || 0,
-          region: tl.region_id ? regionMap.get(tl.region_id) : undefined,
-          rank: 0,
-        }))
+        .map((tl) => {
+          const sales = salesCountByTLName[tl.name.toLowerCase()] || 0;
+          const target = salesTargets[tl.id] || defaultTarget;
+          return {
+            id: tl.id,
+            name: tl.name,
+            role: "TL" as const,
+            sales,
+            target,
+            progress: target > 0 ? Math.round((sales / target) * 100) : 0,
+            region: tl.region_id ? regionMap.get(tl.region_id) : undefined,
+            rank: 0,
+          };
+        })
         .sort((a, b) => b.sales - a.sales)
         .map((p, i) => ({ ...p, rank: i + 1 }));
 
       return leaderboard;
+    },
+  });
+};
+
+// Hook to get/set sales targets
+export const useSalesTargets = () => {
+  return useQuery({
+    queryKey: ["sales-targets"],
+    queryFn: async () => {
+      let targets: Record<string, number> = {};
+      let defaultTarget = 20;
+      
+      try {
+        const storedTargets = localStorage.getItem("tsm_sales_targets");
+        targets = storedTargets ? JSON.parse(storedTargets) : {};
+        
+        const storedDefault = localStorage.getItem("tsm_default_target");
+        defaultTarget = storedDefault ? parseInt(storedDefault, 10) : 20;
+      } catch {
+        targets = {};
+        defaultTarget = 20;
+      }
+      
+      return { targets, defaultTarget };
+    },
+  });
+};
+
+export const useUpdateSalesTarget = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ memberId, target }: { memberId: string; target: number }) => {
+      let targets: Record<string, number> = {};
+      try {
+        const stored = localStorage.getItem("tsm_sales_targets");
+        targets = stored ? JSON.parse(stored) : {};
+      } catch {
+        targets = {};
+      }
+      
+      targets[memberId] = target;
+      localStorage.setItem("tsm_sales_targets", JSON.stringify(targets));
+      return targets;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-targets"] });
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      toast({ title: "Target Updated" });
+    },
+  });
+};
+
+export const useUpdateDefaultTarget = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (target: number) => {
+      localStorage.setItem("tsm_default_target", target.toString());
+      return target;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-targets"] });
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      toast({ title: "Default Target Updated" });
     },
   });
 };

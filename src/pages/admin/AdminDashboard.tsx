@@ -7,7 +7,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { LayoutDashboard, Package, Users, UserPlus, LogOut, AlertTriangle, Home, Menu, X, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Package, Users, UserPlus, LogOut, AlertTriangle, Home, Menu, X, ShieldCheck, FileBarChart } from "lucide-react";
 import AdminOverview from "./AdminOverview";
 import AdminInventory from "./AdminInventory";
 import AdminTeams from "./AdminTeams";
@@ -15,6 +15,7 @@ import AdminTeamDetails from "./AdminTeamDetails";
 import AdminUsers from "./AdminUsers";
 import AdminUnpaid from "./AdminUnpaid";
 import AdminVerification, { getPendingUpdates } from "./AdminVerification";
+import AdminReport from "./AdminReport";
 
 const AdminDashboard = () => {
   const { user, isAdmin, isLoading, signOut } = useAuth();
@@ -45,6 +46,7 @@ const AdminDashboard = () => {
     { path: "/admin/verification", label: "Verification", icon: ShieldCheck, badge: pendingCount },
     { path: "/admin/teams", label: t("admin.teams"), icon: Users, badge: 0 },
     { path: "/admin/users", label: "Members (TL/DSR)", icon: UserPlus, badge: 0 },
+    { path: "/admin/report", label: "TL Report", icon: FileBarChart, badge: 0 },
     { path: "/admin/unpaid", label: t("admin.unpaidRecovery"), icon: AlertTriangle, badge: 0 },
   ];
 
@@ -108,6 +110,7 @@ const AdminDashboard = () => {
           <Route path="/teams" element={<AdminTeams />} />
           <Route path="/teams/:teamId" element={<AdminTeamDetails />} />
           <Route path="/users" element={<AdminUsers />} />
+          <Route path="/report" element={<AdminReport />} />
           <Route path="/unpaid" element={<AdminUnpaid />} />
         </Routes>
       </main>

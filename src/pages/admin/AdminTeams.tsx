@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTeams, useRegions, useCreateTeam, useDeleteTeam } from "@/hooks/useTeams";
@@ -17,6 +17,9 @@ import {
   ChevronRight,
   Loader2,
   Search,
+  Target,
+  Edit,
+  Save,
 } from "lucide-react";
 import {
   Dialog,
@@ -59,6 +62,33 @@ const AdminTeams = () => {
   const [form, setForm] = useState({ name: "", region_id: "" });
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  
+  // Sales targets state
+  const [salesTargets, setSalesTargets] = useState<Record<string, number>>({});
+  const [editingTarget, setEditingTarget] = useState<string | null>(null);
+  const [targetValue, setTargetValue] = useState("");
+  const [showTargetManager, setShowTargetManager] = useState(false);
+
+  // Load sales targets from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("tsm_sales_targets");
+      if (stored) {
+        setSalesTargets(JSON.parse(stored));
+      }
+    } catch {
+      console.error("Failed to load sales targets");
+    }
+  }, []);
+
+  // Save sales targets to localStorage
+  const saveTarget = (tlId: string, target: number) => {
+    const updated = { ...salesTargets, [tlId]: target };
+    setSalesTargets(updated);
+    localStorage.setItem("tsm_sales_targets", JSON.stringify(updated));
+    setEditingTarget(null);
+    setTargetValue("");
+  };
 
   // Get team members from localStorage
   const getLocalMembers = (teamId: string) => {
@@ -68,6 +98,41 @@ const AdminTeams = () => {
       return members.filter((m: any) => m.team_id === teamId);
     } catch {
       return [];
+    }
+  };
+
+  // Get ALL team leaders from localStorage (for targets management)
+  const getAllTeamLeaders = () => {
+    try {
+      const stored = localStorage.getItem("tsm_team_members");
+      const members = stored ? JSON.parse(stored) : [];
+      return members.filter((m: any) => m.role === "team_leader");
+    } catch {
+      return [];
+    }
+  };
+
+  // Get TL's sales for current month
+  const getTLMonthlySales = (tlId: string) => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    // Get DSRs under this TL
+    try {
+      const stored = localStorage.getItem("tsm_team_members");
+      const members = stored ? JSON.parse(stored) : [];
+      const dsrs = members.filter((m: any) => m.team_leader_id === tlId && m.role === "dsr");
+      const dsrIds = dsrs.map((d: any) => d.id);
+      
+      // Count sales from DSRs under this TL
+      const monthlySales = sales?.filter((s) => {
+        const saleDate = new Date(s.created_at);
+        return saleDate >= startOfMonth && dsrIds.includes(s.sold_by_user_id);
+      });
+      
+      return monthlySales?.length || 0;
+    } catch {
+      return 0;
     }
   };
 
@@ -211,13 +276,123 @@ const AdminTeams = () => {
           </p>
           <p className="text-xs text-muted-foreground">Assigned Users</p>
         </div>
-        <div className="glass rounded-xl p-4 border border-border/50 text-center">
-          <p className="text-2xl font-bold text-foreground">
-            {users?.filter((u) => !u.team_id && (u.role === "dsr" || u.role === "team_leader")).length || 0}
-          </p>
-          <p className="text-xs text-muted-foreground">Unassigned</p>
+        <div 
+          className="glass rounded-xl p-4 border border-border/50 text-center cursor-pointer hover:border-primary/50 transition-colors"
+          onClick={() => setShowTargetManager(!showTargetManager)}
+        >
+          <div className="flex items-center justify-center gap-2">
+            <Target className="w-5 h-5 text-primary" />
+            <p className="text-2xl font-bold text-foreground">{getAllTeamLeaders().length}</p>
+          </div>
+          <p className="text-xs text-muted-foreground">TL Targets</p>
         </div>
       </div>
+
+      {/* Sales Target Manager Panel */}
+      {showTargetManager && (
+        <div className="glass rounded-xl p-6 border border-border/50 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/20">
+                <Target className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Monthly Sales Targets</h3>
+                <p className="text-sm text-muted-foreground">Set targets for each Team Leader</p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setShowTargetManager(false)}>
+              Close
+            </Button>
+          </div>
+
+          <div className="border-t border-border/50 pt-4">
+            {getAllTeamLeaders().length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">
+                No Team Leaders found. Add Team Leaders first.
+              </p>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {getAllTeamLeaders().map((tl: any) => {
+                  const currentTarget = salesTargets[tl.id] || 0;
+                  const currentSales = getTLMonthlySales(tl.id);
+                  const progress = currentTarget > 0 ? Math.min(100, Math.round((currentSales / currentTarget) * 100)) : 0;
+                  
+                  return (
+                    <div key={tl.id} className="p-4 bg-secondary/30 rounded-lg border border-border/50">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <p className="font-medium text-foreground">{tl.name}</p>
+                          <p className="text-xs text-muted-foreground">{tl.region || "No Region"}</p>
+                        </div>
+                        {editingTarget === tl.id ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              const val = parseInt(targetValue) || 0;
+                              saveTarget(tl.id, val);
+                            }}
+                          >
+                            <Save className="w-4 h-4 text-success" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              setEditingTarget(tl.id);
+                              setTargetValue(currentTarget.toString());
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {editingTarget === tl.id ? (
+                        <div className="flex items-center gap-2 mt-2">
+                          <Input
+                            type="number"
+                            placeholder="Enter target"
+                            value={targetValue}
+                            onChange={(e) => setTargetValue(e.target.value)}
+                            className="h-8"
+                            min={0}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const val = parseInt(targetValue) || 0;
+                                saveTarget(tl.id, val);
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between text-sm mb-1">
+                            <span className="text-muted-foreground">
+                              {currentSales} / {currentTarget} sales
+                            </span>
+                            <span className={cn(
+                              "font-medium",
+                              progress >= 100 ? "text-success" : progress >= 50 ? "text-warning" : "text-muted-foreground"
+                            )}>
+                              {progress}%
+                            </span>
+                          </div>
+                          <Progress value={progress} className="h-2" />
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Teams Grid */}
       {filteredTeams?.length === 0 ? (

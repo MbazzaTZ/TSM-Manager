@@ -15,6 +15,8 @@ export interface InventoryItem {
   region_id: string | null;
   assigned_to_team_id: string | null;
   assigned_to_user_id: string | null;
+  assigned_to_tl: string | null;
+  assigned_to_dsr: string | null;
   created_at: string;
   updated_at: string;
   regions?: { name: string } | null;
