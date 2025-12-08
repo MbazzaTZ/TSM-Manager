@@ -39,13 +39,14 @@ export default function DSRStock({ onNavigate }: DSRStockProps) {
     if (!user) return;
 
     try {
-      const { data: dsrData } = await supabase
-        .from('dsrs')
+      // Get profile data for the current user
+      const { data: profileData } = await supabase
+        .from('profiles')
         .select('id')
         .eq('user_id', user.id)
         .single();
 
-      if (!dsrData) {
+      if (!profileData) {
         setLoading(false);
         return;
       }
@@ -57,7 +58,7 @@ export default function DSRStock({ onNavigate }: DSRStockProps) {
         .eq('status', 'in_hand')
         .order('updated_at', { ascending: false });
 
-      setStock(stockData || []);
+      setStock((stockData || []) as StockItem[]);
     } catch (error) {
       console.error('Error fetching stock:', error);
     } finally {

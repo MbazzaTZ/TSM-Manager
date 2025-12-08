@@ -33,45 +33,45 @@ export default function DSRDashboard({ onNavigate }: DSRDashboardProps) {
     if (!user) return;
 
     try {
-      const { data: dsrData } = await supabase
-        .from('dsrs')
-        .select('id')
+      // Get profile data for the current user
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, team_id')
         .eq('user_id', user.id)
         .single();
 
-      if (!dsrData) {
+      if (!profileData) {
         setLoading(false);
         return;
       }
 
-      setDsrId(dsrData.id);
+      setDsrId(profileData.id);
 
+      // Count inventory assigned to this user with status 'in_hand'
       const { count: stockCount } = await supabase
-        .from('stock')
+        .from('inventory')
         .select('*', { count: 'exact', head: true })
-        .eq('assigned_to_dsr', dsrData.id)
-        .eq('status', 'assigned-dsr');
+        .eq('assigned_to_user_id', user.id)
+        .eq('status', 'in_hand');
 
+      // Get sales made by this user
       const { data: sales, count: salesCount } = await supabase
         .from('sales')
         .select('*', { count: 'exact' })
-        .eq('dsr_id', dsrData.id)
+        .eq('sold_by_user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(5);
 
+      // Count paid sales as "approved"
       const { count: approvedCount } = await supabase
         .from('sales')
         .select('*', { count: 'exact', head: true })
-        .eq('dsr_id', dsrData.id)
-        .eq('admin_approved', true);
+        .eq('sold_by_user_id', user.id)
+        .eq('is_paid', true);
 
-      const { data: commissions } = await supabase
-        .from('commissions')
-        .select('amount, is_paid')
-        .eq('dsr_id', dsrData.id);
-
-      const totalCommission = commissions?.reduce((sum, c) => sum + Number(c.amount), 0) || 0;
-      const pendingCommission = commissions?.filter(c => !c.is_paid).reduce((sum, c) => sum + Number(c.amount), 0) || 0;
+      // Since commissions table doesn't exist, set commission values to 0
+      const totalCommission = 0;
+      const pendingCommission = 0;
 
       setMetrics({
         myStock: stockCount || 0,
@@ -161,13 +161,13 @@ export default function DSRDashboard({ onNavigate }: DSRDashboardProps) {
                 <div key={sale.id} className="flex items-center justify-between p-3 rounded-lg bg-background/50">
                   <div>
                     <p className="font-medium text-foreground">{sale.sale_id}</p>
-                    <p className="text-sm text-muted-foreground">SC: {sale.smart_card_number}</p>
+                    <p className="text-sm text-muted-foreground">Sold: {new Date(sale.sold_at).toLocaleDateString()}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant={sale.admin_approved ? 'default' : sale.tl_verified ? 'secondary' : 'outline'} className={sale.admin_approved ? 'bg-success/10 text-success' : ''}>
-                      {sale.admin_approved ? 'Approved' : sale.tl_verified ? 'Verified' : 'Pending'}
+                    <Badge variant={sale.is_paid ? 'default' : 'outline'} className={sale.is_paid ? 'bg-success/10 text-success' : ''}>
+                      {sale.is_paid ? 'Paid' : 'Unpaid'}
                     </Badge>
-                    <Badge variant="outline">{sale.sale_type}</Badge>
+                    <Badge variant="outline">{sale.has_package ? 'With Package' : 'No Package'}</Badge>
                   </div>
                 </div>
               ))}

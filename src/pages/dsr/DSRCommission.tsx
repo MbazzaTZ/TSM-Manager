@@ -26,18 +26,33 @@ export default function DSRCommission() {
   async function fetchCommissions() {
     if (!user) return;
     try {
-      const { data: dsrData } = await supabase
-        .from('dsrs')
+      // Get profile data for the current user
+      const { data: profileData } = await supabase
+        .from('profiles')
         .select('id')
         .eq('user_id', user.id)
         .single();
-      if (!dsrData) { setLoading(false); return; }
-      const { data: commissionsData } = await supabase
-        .from('commissions')
-        .select(`id, amount, is_paid, paid_at, created_at, sales!inner(sale_id)`) // requires FK
-        .eq('dsr_id', dsrData.id)
+      if (!profileData) { setLoading(false); return; }
+      
+      // Since commissions table doesn't exist in the schema, 
+      // we'll derive commission data from sales (placeholder implementation)
+      const { data: salesData } = await supabase
+        .from('sales')
+        .select('id, sale_id, is_paid, paid_at, created_at')
+        .eq('sold_by_user_id', user.id)
         .order('created_at', { ascending: false });
-      const processed = (commissionsData || []).map((c: any) => ({ ...c, sale_id: c.sales?.sale_id || 'N/A' }));
+      
+      // Create mock commission entries from sales (each sale = 5000 TZS commission)
+      const COMMISSION_RATE = 5000;
+      const processed = (salesData || []).map((s: any) => ({
+        id: s.id,
+        amount: COMMISSION_RATE,
+        is_paid: s.is_paid,
+        paid_at: s.paid_at,
+        created_at: s.created_at,
+        sale_id: s.sale_id,
+      }));
+      
       const total = processed.reduce((sum: number, c: any) => sum + Number(c.amount), 0);
       const paid = processed.filter((c: any) => c.is_paid).reduce((sum: number, c: any) => sum + Number(c.amount), 0);
       const pending = total - paid;

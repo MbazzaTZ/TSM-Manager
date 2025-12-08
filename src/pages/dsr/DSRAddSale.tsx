@@ -7,8 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Package, Loader2, ArrowLeft, ShoppingCart, Zap } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Package, Loader2, ArrowLeft, ShoppingCart } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface DSRAddSaleProps {
@@ -17,46 +16,29 @@ interface DSRAddSaleProps {
 
 interface StockOption {
   id: string;
-  stock_id: string;
-  smartcard_number: string | null;
+  batch_number: string;
+  smartcard: string | null;
   serial_number: string | null;
-  type: string;
+  stock_type: string;
 }
 
 const STOCK_PRICES: Record<string, number> = {
-  'FS': 65000,
-  'DO': 25000,
-  'DVS': 27500,
-  'Full Set (FS)': 65000,
-  'Decoder Only (DO)': 25000,
+  'full_set': 65000,
+  'decoder_only': 25000,
+  'virtual': 27500,
 };
-
-const DSTV_PACKAGES = [
-  'Premium',
-  'Compact Plus',
-  'Compact',
-  'Family',
-  'Access',
-  'Lite',
-];
 
 export default function DSRAddSale({ onNavigate }: DSRAddSaleProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [dsrId, setDsrId] = useState<string | null>(null);
-  const [tlId, setTlId] = useState<string | null>(null);
-  const [regionId, setRegionId] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [teamId, setTeamId] = useState<string | null>(null);
   const [availableStock, setAvailableStock] = useState<StockOption[]>([]);
-  const [saleSource, setSaleSource] = useState<'physical' | 'virtual'>('physical');
   const [selectedStockId, setSelectedStockId] = useState('');
-  const [smartCardNumber, setSmartCardNumber] = useState('');
-  const [snNumber, setSnNumber] = useState('');
-  const [saleType, setSaleType] = useState<'FS' | 'DO' | 'DVS'>('FS');
-  const [packageOption, setPackageOption] = useState<'package' | 'no-package'>('no-package');
-  const [dstvPackage, setDstvPackage] = useState('');
-  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'unpaid'>('paid');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [hasPackage, setHasPackage] = useState(false);
+  const [isPaid, setIsPaid] = useState(true);
 
   useEffect(() => {
     if (user) {
@@ -67,22 +49,23 @@ export default function DSRAddSale({ onNavigate }: DSRAddSaleProps) {
   async function fetchDSRData() {
     if (!user) return;
     try {
-      const { data: dsrData } = await supabase
-        .from('dsrs')
-        .select('id, tl_id, region_id, team_id')
+      // Get profile data for the current user
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, team_id')
         .eq('user_id', user.id)
         .single();
-      if (!dsrData) { setLoading(false); return; }
-      setDsrId(dsrData.id);
-      setTlId(dsrData.tl_id);
-      setRegionId(dsrData.region_id);
-      setTeamId(dsrData.team_id);
+      if (!profileData) { setLoading(false); return; }
+      setProfileId(profileData.id);
+      setTeamId(profileData.team_id);
+      
+      // Get inventory assigned to this user (status = 'in_hand')
       const { data: stockData } = await supabase
-        .from('stock')
-        .select('id, stock_id, smartcard_number, serial_number, type')
-        .eq('assigned_to_dsr', dsrData.id)
-        .eq('status', 'assigned-dsr');
-      setAvailableStock(stockData || []);
+        .from('inventory')
+        .select('id, batch_number, smartcard, serial_number, stock_type')
+        .eq('assigned_to_user_id', user.id)
+        .eq('status', 'in_hand');
+      setAvailableStock((stockData || []) as StockOption[]);
     } catch (error) {
       console.error('Error fetching DSR data:', error);
     } finally { setLoading(false); }
@@ -90,49 +73,40 @@ export default function DSRAddSale({ onNavigate }: DSRAddSaleProps) {
 
   const handleStockSelect = (stockId: string) => {
     setSelectedStockId(stockId);
-    const selected = availableStock.find(s => s.id === stockId);
-    if (selected) {
-      setSmartCardNumber(selected.smartcard_number || '');
-      setSnNumber(selected.serial_number || '');
-      if (selected.type.includes('Full Set') || selected.type === 'FS') {
-        setSaleType('FS');
-      } else if (selected.type.includes('Decoder') || selected.type === 'DO') {
-        setSaleType('DO');
-      }
-    }
+  };
+
+  const getSelectedStockType = () => {
+    const selected = availableStock.find(s => s.id === selectedStockId);
+    return selected?.stock_type || 'full_set';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!dsrId) { toast.error('DSR record not found'); return; }
-    if (!smartCardNumber || !snNumber) { toast.error('Please fill in all required fields'); return; }
-    if (saleSource === 'physical' && !selectedStockId) { toast.error('Please select a stock item'); return; }
+    if (!user) { toast.error('User not authenticated'); return; }
+    if (!selectedStockId) { toast.error('Please select a stock item'); return; }
     setSubmitting(true);
     try {
-      const finalSaleType = saleSource === 'virtual' ? 'DVS' : saleType;
-      const salePrice = STOCK_PRICES[finalSaleType] || 0;
+      // Generate a unique sale_id
+      const saleId = `SALE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+      
       const { error: saleError } = await supabase
         .from('sales')
         .insert({
-          stock_id: saleSource === 'physical' ? selectedStockId : null,
-          dsr_id: dsrId,
-          team_id: teamId,
-          tl_id: tlId,
-          region_id: regionId,
-          smart_card_number: smartCardNumber,
-          sn_number: snNumber,
-          sale_type: finalSaleType as any,
-          is_virtual: saleSource === 'virtual',
-          package_option: packageOption,
-          dstv_package: packageOption === 'package' ? dstvPackage : null,
-          payment_status: paymentStatus as any,
-          sale_price: salePrice,
-        } as any);
+          sale_id: saleId,
+          inventory_id: selectedStockId,
+          sold_by_user_id: user.id,
+          customer_phone: customerPhone || null,
+          has_package: hasPackage,
+          is_paid: isPaid,
+        });
       if (saleError) throw saleError;
-      if (saleSource === 'physical' && selectedStockId) {
-        const newStatus = paymentStatus === 'paid' ? 'sold-paid' : 'sold-unpaid';
-        await supabase.from('stock').update({ status: newStatus }).eq('id', selectedStockId);
-      }
+      
+      // Update inventory status to 'sold'
+      await supabase
+        .from('inventory')
+        .update({ status: 'sold' })
+        .eq('id', selectedStockId);
+      
       toast.success('Sale recorded successfully!');
       onNavigate('my-sales');
     } catch (error: any) {
@@ -164,105 +138,55 @@ export default function DSRAddSale({ onNavigate }: DSRAddSaleProps) {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="glass">
           <CardHeader>
-            <CardTitle className="text-lg">Select Sale Type</CardTitle>
+            <CardTitle className="text-lg">Select Stock Item</CardTitle>
           </CardHeader>
           <CardContent>
-            <RadioGroup value={saleSource} onValueChange={(v) => setSaleSource(v as 'physical' | 'virtual')} className="grid grid-cols-2 gap-4">
-              <Label htmlFor="physical" className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${saleSource === 'physical' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}>
-                <RadioGroupItem value="physical" id="physical" />
-                <Package className="h-5 w-5 text-primary" />
-                <div>
-                  <p className="font-medium">Physical Stock</p>
-                  <p className="text-xs text-muted-foreground">Full Set or Decoder Only</p>
-                </div>
-              </Label>
-              <Label htmlFor="virtual" className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${saleSource === 'virtual' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}>
-                <RadioGroupItem value="virtual" id="virtual" />
-                <Zap className="h-5 w-5 text-warning" />
-                <div>
-                  <p className="font-medium">Virtual Sale (DVS)</p>
-                  <p className="text-xs text-muted-foreground">Digital Virtual Stock</p>
-                </div>
-              </Label>
-            </RadioGroup>
+            {availableStock.length === 0 ? (
+              <p className="text-center py-4 text-muted-foreground">No stock available. Contact your TL for stock assignment.</p>
+            ) : (
+              <Select value={selectedStockId} onValueChange={handleStockSelect}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select stock item" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableStock.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.batch_number} • {s.stock_type === 'full_set' ? 'Full Set' : 'Decoder Only'} • SC: {s.smartcard || '-'} • SN: {s.serial_number || '-'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </CardContent>
         </Card>
-
-        {saleSource === 'physical' && (
-          <Card className="glass">
-            <CardHeader>
-              <CardTitle className="text-lg">Select Stock Item</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {availableStock.length === 0 ? (
-                <p className="text-center py-4 text-muted-foreground">No stock available. Contact your TL for stock assignment.</p>
-              ) : (
-                <Select value={selectedStockId} onValueChange={handleStockSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select stock item" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableStock.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.stock_id} • {s.type} • SC: {s.smartcard_number || '-'} • SN: {s.serial_number || '-'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </CardContent>
-          </Card>
-        )}
 
         <Card className="glass">
           <CardHeader>
             <CardTitle className="text-lg">Sale Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="smartcard">Smartcard Number *</Label>
-                <Input id="smartcard" placeholder="Enter smartcard number" value={smartCardNumber} onChange={(e) => setSmartCardNumber(e.target.value)} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sn">Serial Number *</Label>
-                <Input id="sn" placeholder="Enter serial number" value={snNumber} onChange={(e) => setSnNumber(e.target.value)} required />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Customer Phone (Optional)</Label>
+              <Input id="phone" placeholder="Enter customer phone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
             </div>
 
             <div className="space-y-2">
-              <Label>Package Option</Label>
-              <RadioGroup value={packageOption} onValueChange={(v) => setPackageOption(v as 'package' | 'no-package')} className="flex gap-4">
+              <Label>Has Package?</Label>
+              <RadioGroup value={hasPackage ? 'yes' : 'no'} onValueChange={(v) => setHasPackage(v === 'yes')} className="flex gap-4">
                 <Label className="flex items-center gap-2 cursor-pointer">
-                  <RadioGroupItem value="package" />
-                  <span>With Package</span>
+                  <RadioGroupItem value="yes" />
+                  <span>Yes</span>
                 </Label>
                 <Label className="flex items-center gap-2 cursor-pointer">
-                  <RadioGroupItem value="no-package" />
-                  <span>No Package</span>
+                  <RadioGroupItem value="no" />
+                  <span>No</span>
                 </Label>
               </RadioGroup>
             </div>
 
-            {packageOption === 'package' && (
-              <div className="space-y-2">
-                <Label htmlFor="dstv-package">DSTV Package</Label>
-                <Select value={dstvPackage} onValueChange={setDstvPackage}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select package" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DSTV_PACKAGES.map((p) => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
             <div className="space-y-2">
               <Label>Payment Status</Label>
-              <RadioGroup value={paymentStatus} onValueChange={(v) => setPaymentStatus(v as 'paid' | 'unpaid')} className="flex gap-4">
+              <RadioGroup value={isPaid ? 'paid' : 'unpaid'} onValueChange={(v) => setIsPaid(v === 'paid')} className="flex gap-4">
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <RadioGroupItem value="paid" />
                   <span>Paid</span>
@@ -280,12 +204,12 @@ export default function DSRAddSale({ onNavigate }: DSRAddSaleProps) {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Sale Price:</span>
-              <span className="text-2xl font-bold text-primary">TZS {(STOCK_PRICES[saleSource === 'virtual' ? 'DVS' : saleType] || 0).toLocaleString()}</span>
+              <span className="text-2xl font-bold text-primary">TZS {(STOCK_PRICES[getSelectedStockType()] || 0).toLocaleString()}</span>
             </div>
           </CardContent>
         </Card>
 
-        <Button type="submit" className="w-full gap-2" size="lg" disabled={submitting || (saleSource === 'physical' && !selectedStockId)}>
+        <Button type="submit" className="w-full gap-2" size="lg" disabled={submitting || !selectedStockId}>
           {submitting ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
