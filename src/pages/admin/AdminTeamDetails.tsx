@@ -103,31 +103,30 @@ const AdminTeamDetails = () => {
 
   // Team stats - calculate based on actual inventory and sales data
   const teamStats = useMemo(() => {
-    // Get TLs in this team from local storage
-    const teamTLs = localMembers.filter((m: any) => m.role === "team_leader");
-    const teamTLNames = teamTLs.map((tl: any) => tl.name.toLowerCase());
-    
-    // Get all inventory assigned to TLs in this team
-    const teamInventory = inventory?.filter((item) => 
-      item.assigned_to_tl && teamTLNames.includes(item.assigned_to_tl.toLowerCase())
-    ) || [];
-    
+    // Get TLs in this team from both database and localStorage
+    const dbTLs = teamMembers.filter((m) => m.role === "team_leader");
+    const localTLs = localMembers.filter((m: any) => m.role === "team_leader");
+    const allTLs = [...dbTLs, ...localTLs];
+
+    // Get all inventory assigned to this team
+    const teamInventory = inventory?.filter((item) => item.assigned_to_team_id === teamId) || [];
+
     // Stock metrics
     const stockReceived = teamInventory.length;
     const stockInHand = teamInventory.filter((i) => i.status === "in_hand").length;
     const stockSold = teamInventory.filter((i) => i.status === "sold").length;
-    
+
     // Get sales data for team inventory
     const teamInventoryIds = teamInventory.map((i) => i.id);
     const teamSales = sales?.filter((s) => teamInventoryIds.includes(s.inventory_id)) || [];
     const paidSales = teamSales.filter((s) => s.is_paid).length;
     const unpaidSales = teamSales.filter((s) => !s.is_paid).length;
-    
+
     // Calculate conversion rate
     const conversionRate = stockReceived > 0 
       ? Math.round((stockSold / stockReceived) * 100) 
       : 0;
-    
+
     // Get sales targets and calculate monthly performance
     let salesTargets: Record<string, number> = {};
     try {
@@ -136,12 +135,12 @@ const AdminTeamDetails = () => {
     } catch {
       salesTargets = {};
     }
-    
+
     // Monthly target (sum of all TL targets)
-    const monthlyTarget = teamTLs.reduce((sum: number, tl: any) => {
+    const monthlyTarget = allTLs.reduce((sum: number, tl: any) => {
       return sum + (salesTargets[tl.id] || 20);
     }, 0);
-    
+
     // Monthly actual sales
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -152,7 +151,7 @@ const AdminTeamDetails = () => {
 
     return {
       totalMembers: allMembers.length,
-      totalTLs: teamTLs.length,
+      totalTLs: allTLs.length,
       stockReceived,
       stockInHand,
       stockSold,
@@ -165,7 +164,7 @@ const AdminTeamDetails = () => {
       salesGap,
       targetProgress,
     };
-  }, [allMembers, sales, inventory, localMembers]);
+  }, [allMembers, sales, inventory, teamMembers, localMembers, teamId]);
 
   const handleAddMember = async () => {
     if (!selectedUserId) return;
@@ -328,13 +327,18 @@ const AdminTeamDetails = () => {
             <Target className="w-5 h-5 text-primary" />
             <h3 className="font-semibold text-foreground">Monthly Target Progress</h3>
           </div>
-          <Badge 
-            variant={teamStats.targetProgress >= 100 ? "success" : teamStats.targetProgress >= 50 ? "warning" : "destructive"}
-          >
-            {teamStats.targetProgress}%
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge 
+              variant={teamStats.targetProgress >= 100 ? "success" : teamStats.targetProgress >= 50 ? "warning" : "destructive"}
+            >
+              {teamStats.targetProgress}%
+            </Badge>
+            <Button variant="outline" size="sm" onClick={() => setTargetDialogOpen(true)}>
+              Edit Target
+            </Button>
+          </div>
         </div>
-        
+
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="text-center p-3 bg-secondary/30 rounded-lg">
             <p className="text-2xl font-bold text-primary">{teamStats.monthlyTarget}</p>
@@ -363,12 +367,81 @@ const AdminTeamDetails = () => {
             </p>
           </div>
         </div>
-        
+
         <Progress 
           value={Math.min(teamStats.targetProgress, 100)} 
           className="h-3" 
         />
+
+        {/* Target Edit/Delete Dialog */}
+        <Dialog open={targetDialogOpen} onOpenChange={setTargetDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Team Target</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Set monthly target for each TL in this team:</p>
+                {allTLs.length === 0 ? (
+                  <p className="text-muted-foreground">No TLs in this team.</p>
+                ) : (
+                  allTLs.map((tl: any) => (
+                    <div key={tl.id} className="flex items-center gap-2 mb-2">
+                      <span className="font-medium">{tl.name}</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={targetInputs[tl.id] ?? salesTargets[tl.id] ?? 20}
+                        onChange={e => setTargetInputs({ ...targetInputs, [tl.id]: Number(e.target.value) })}
+                        className="w-24"
+                      />
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteTarget(tl.id)}>
+                        Delete
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button variant="default" onClick={handleSaveTargets}>Save</Button>
+                <Button variant="outline" onClick={() => setTargetDialogOpen(false)}>Close</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
+  // Team target dialog state and logic
+  const [targetDialogOpen, setTargetDialogOpen] = useState(false);
+  const [targetInputs, setTargetInputs] = useState<Record<string, number>>({});
+  // Get sales targets from localStorage
+  let salesTargets: Record<string, number> = {};
+  try {
+    const stored = localStorage.getItem("tsm_sales_targets");
+    salesTargets = stored ? JSON.parse(stored) : {};
+  } catch {
+    salesTargets = {};
+  }
+
+  // Save targets to localStorage
+  const handleSaveTargets = () => {
+    const updated = { ...salesTargets, ...targetInputs };
+    localStorage.setItem("tsm_sales_targets", JSON.stringify(updated));
+    setTargetDialogOpen(false);
+    window.location.reload();
+  };
+
+  // Delete target for a TL
+  const handleDeleteTarget = (tlId: string) => {
+    const updated = { ...salesTargets };
+    delete updated[tlId];
+    localStorage.setItem("tsm_sales_targets", JSON.stringify(updated));
+    setTargetInputs((prev) => {
+      const copy = { ...prev };
+      delete copy[tlId];
+      return copy;
+    });
+    window.location.reload();
+  };
 
       {/* Team Members */}
       <div className="glass rounded-xl p-5 border border-border/50">
