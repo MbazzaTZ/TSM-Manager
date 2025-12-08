@@ -11,6 +11,19 @@ BEGIN
   END IF;
 END $$;
 
+-- Create DSRs table to map app DSR profile to Supabase user and TL/team/region relationships
+CREATE TABLE IF NOT EXISTS public.dsrs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  tl_id uuid NULL REFERENCES public.profiles(id) ON DELETE SET NULL,
+  region_id text NULL,
+  team_id text NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Ensure an index for lookups by user
+CREATE INDEX IF NOT EXISTS dsrs_user_idx ON public.dsrs(user_id);
+
 -- 2) Inventory assignments: allow DSR to read items assigned to them; TL/Admin broader
 -- Assumes inventory table has assigned_to_dsr text UUID referencing profiles(id)
 -- Create policy if not exists
@@ -22,22 +35,19 @@ BEGIN
     CREATE POLICY inventory_select_by_role ON public.inventory
       FOR SELECT
       USING (
-        -- Admin: full access
-        EXISTS (
-          SELECT 1 FROM public.profiles p 
-          WHERE p.id = auth.uid() AND p.role = 'admin'
+        -- Admin or regional manager: full access
+        public.is_admin_or_manager(auth.uid())
+        OR
+        -- TL: read items assigned to their team
+        (
+          public.has_role(auth.uid(), 'team_leader')
+          AND inventory.assigned_to_team_id = public.get_user_team(auth.uid())
         )
         OR
-        -- TL: read items assigned to their team leader id
-        EXISTS (
-          SELECT 1 FROM public.profiles p 
-          WHERE p.id = auth.uid() AND p.role = 'tl' AND inventory.assigned_to_tl = p.id
-        )
-        OR
-        -- DSR: read items assigned to them
-        EXISTS (
-          SELECT 1 FROM public.profiles p 
-          WHERE p.id = auth.uid() AND p.role = 'dsr' AND inventory.assigned_to_dsr = p.id
+        -- DSR: read items assigned to themselves
+        (
+          public.has_role(auth.uid(), 'dsr')
+          AND inventory.assigned_to_user_id = auth.uid()
         )
       );
   END IF;
@@ -53,9 +63,9 @@ BEGIN
     CREATE POLICY sales_select_by_role ON public.sales
       FOR SELECT
       USING (
-        EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
-        OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'tl')
-        OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'dsr' AND sales.created_by = p.id)
+        public.is_admin_or_manager(auth.uid())
+        OR public.has_role(auth.uid(), 'team_leader')
+        OR sales.sold_by_user_id = auth.uid()
       );
   END IF;
 END $$;
@@ -68,11 +78,10 @@ BEGIN
     CREATE POLICY sales_insert_by_dsr ON public.sales
       FOR INSERT
       WITH CHECK (
-        -- created_by must be current user
-        sales.created_by = auth.uid()
+        sales.sold_by_user_id = auth.uid()
         AND EXISTS (
           SELECT 1 FROM public.inventory i 
-          WHERE i.id = sales.inventory_id AND i.assigned_to_dsr = auth.uid()
+          WHERE i.id = sales.inventory_id AND i.assigned_to_user_id = auth.uid()
         )
       );
   END IF;
@@ -87,16 +96,27 @@ BEGIN
 END; $$ LANGUAGE plpgsql IMMUTABLE;
 
 -- 5) DSR report view: expose per-user aggregated sales and commission
+-- Add sale_price column if missing to support commission calculation
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema='public' AND table_name='sales' AND column_name='sale_price'
+  ) THEN
+    ALTER TABLE public.sales ADD COLUMN sale_price numeric;
+  END IF;
+END $$;
+
 CREATE OR REPLACE VIEW public.v_dsr_sales_report AS
 SELECT 
-  s.created_by AS dsr_id,
+  s.sold_by_user_id AS dsr_user_id,
   COUNT(*) AS sales_count,
-  COALESCE(SUM(s.price), 0) AS total_sales,
-  COALESCE(SUM(public.compute_commission(s.price)), 0) AS total_commission,
-  MIN(s.sold_at) AS first_sale_at,
-  MAX(s.sold_at) AS last_sale_at
+  COALESCE(SUM(COALESCE(s.sale_price, 0)), 0) AS total_sales,
+  COALESCE(SUM(public.compute_commission(COALESCE(s.sale_price, 0))), 0) AS total_commission,
+  MIN(s.created_at) AS first_sale_at,
+  MAX(s.created_at) AS last_sale_at
 FROM public.sales s
-GROUP BY s.created_by;
+GROUP BY s.sold_by_user_id;
 
 -- 6) RLS on the view via underlying table policies suffices; optional explicit policy for select on view
 DO $$

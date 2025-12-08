@@ -14,12 +14,13 @@ interface DSRStockProps {
 
 interface StockItem {
   id: string;
-  stock_id: string;
-  smartcard_number: string | null;
-  serial_number: string | null;
-  type: string;
-  status: string;
-  date_assigned: string | null;
+  batch_number: string;
+  smartcard: string;
+  serial_number: string;
+  stock_type: 'full_set' | 'decoder_only';
+  status: 'in_store' | 'in_hand' | 'sold';
+  assigned_to_user_id: string | null;
+  updated_at: string;
 }
 
 export default function DSRStock({ onNavigate }: DSRStockProps) {
@@ -50,11 +51,11 @@ export default function DSRStock({ onNavigate }: DSRStockProps) {
       }
 
       const { data: stockData } = await supabase
-        .from('stock')
+        .from('inventory')
         .select('*')
-        .eq('assigned_to_dsr', dsrData.id)
-        .eq('status', 'assigned-dsr')
-        .order('date_assigned', { ascending: false });
+        .eq('assigned_to_user_id', user.id)
+        .eq('status', 'in_hand')
+        .order('updated_at', { ascending: false });
 
       setStock(stockData || []);
     } catch (error) {
@@ -65,18 +66,16 @@ export default function DSRStock({ onNavigate }: DSRStockProps) {
   }
 
   const filteredStock = stock.filter(item =>
-    item.stock_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.smartcard_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.batch_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.smartcard?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.serial_number?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'Full Set (FS)':
-      case 'FS':
+      case 'full_set':
         return 'bg-primary/10 text-primary';
-      case 'Decoder Only (DO)':
-      case 'DO':
+      case 'decoder_only':
         return 'bg-warning/10 text-warning';
       default:
         return 'bg-muted text-muted-foreground';
@@ -133,25 +132,25 @@ export default function DSRStock({ onNavigate }: DSRStockProps) {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead>Stock ID</TableHead>
-                    <TableHead>Smartcard No.</TableHead>
+                    <TableHead>Batch</TableHead>
+                    <TableHead>Smartcard</TableHead>
                     <TableHead>Serial No.</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Assigned Date</TableHead>
+                    <TableHead>Updated</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredStock.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.stock_id}</TableCell>
-                      <TableCell>{item.smartcard_number || '-'}</TableCell>
+                      <TableCell className="font-medium">{item.batch_number}</TableCell>
+                      <TableCell>{item.smartcard || '-'}</TableCell>
                       <TableCell>{item.serial_number || '-'}</TableCell>
                       <TableCell>
-                        <Badge className={getTypeColor(item.type)}>{item.type}</Badge>
+                        <Badge className={getTypeColor(item.stock_type)}>{item.stock_type}</Badge>
                       </TableCell>
                       <TableCell>
-                        {item.date_assigned 
-                          ? new Date(item.date_assigned).toLocaleDateString()
+                        {item.updated_at 
+                          ? new Date(item.updated_at).toLocaleDateString()
                           : '-'}
                       </TableCell>
                     </TableRow>

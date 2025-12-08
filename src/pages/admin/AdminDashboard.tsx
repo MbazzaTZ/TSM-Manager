@@ -16,6 +16,7 @@ import AdminUsers from "./AdminUsers";
 import AdminUnpaid from "./AdminUnpaid";
 import AdminVerification, { getPendingUpdates } from "./AdminVerification";
 import AdminReport from "./AdminReport";
+import AdminCreateUser from "./AdminCreateUser";
 
 const AdminDashboard = () => {
   const { user, isAdmin, isLoading, signOut } = useAuth();
@@ -46,6 +47,7 @@ const AdminDashboard = () => {
     { path: "/admin/verification", label: "Verification", icon: ShieldCheck, badge: pendingCount },
     { path: "/admin/teams", label: t("admin.teams"), icon: Users, badge: 0 },
     { path: "/admin/users", label: "Members (TL/DSR)", icon: UserPlus, badge: 0 },
+    { path: "/admin/create-user", label: "Create User", icon: UserPlus, badge: 0 },
     { path: "/admin/report", label: "TL Report", icon: FileBarChart, badge: 0 },
     { path: "/admin/unpaid", label: t("admin.unpaidRecovery"), icon: AlertTriangle, badge: 0 },
   ];
@@ -110,6 +112,7 @@ const AdminDashboard = () => {
           <Route path="/teams" element={<AdminTeams />} />
           <Route path="/teams/:teamId" element={<AdminTeamDetails />} />
           <Route path="/users" element={<AdminUsers />} />
+          <Route path="/create-user" element={<AdminCreateUser />} />
           <Route path="/report" element={<AdminReport />} />
           <Route path="/unpaid" element={<AdminUnpaid />} />
         </Routes>

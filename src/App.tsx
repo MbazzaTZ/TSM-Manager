@@ -9,6 +9,11 @@ import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import DSRDashboard from "./pages/dsr/DSRDashboard";
+import DSRStock from "./pages/dsr/DSRStock";
+import DSRMySales from "./pages/dsr/DSRMySales";
+import DSRCommission from "./pages/dsr/DSRCommission";
+import RequireRole from "@/components/RequireRole";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +31,11 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/login" element={<Login />} />
               <Route path="/admin/*" element={<AdminDashboard />} />
+              {/* DSR protected routes */}
+              <Route path="/dsr/dashboard" element={<RequireRole role="dsr"><DSRDashboard onNavigate={() => {}} /></RequireRole>} />
+              <Route path="/dsr/stock" element={<RequireRole role="dsr"><DSRStock onNavigate={() => {}} /></RequireRole>} />
+              <Route path="/dsr/my-sales" element={<RequireRole role="dsr"><DSRMySales onNavigate={() => {}} /></RequireRole>} />
+              <Route path="/dsr/commission" element={<RequireRole role="dsr"><DSRCommission /></RequireRole>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

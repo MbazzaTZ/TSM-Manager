@@ -16,13 +16,10 @@ interface DSRMySalesProps {
 interface Sale {
   id: string;
   sale_id: string;
-  smart_card_number: string;
-  sn_number: string;
-  sale_type: string;
-  payment_status: string;
-  tl_verified: boolean;
-  admin_approved: boolean;
-  sale_price: number;
+  inventory_id: string;
+  has_package: boolean;
+  is_paid: boolean;
+  sold_at: string;
   created_at: string;
 }
 
@@ -43,21 +40,10 @@ export default function DSRMySales({ onNavigate }: DSRMySalesProps) {
     if (!user) return;
 
     try {
-      const { data: dsrData } = await supabase
-        .from('dsrs')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!dsrData) {
-        setLoading(false);
-        return;
-      }
-
       const { data: salesData } = await supabase
         .from('sales')
         .select('*')
-        .eq('dsr_id', dsrData.id)
+        .eq('sold_by_user_id', user.id)
         .order('created_at', { ascending: false });
 
       setSales(salesData || []);
@@ -69,23 +55,17 @@ export default function DSRMySales({ onNavigate }: DSRMySalesProps) {
   }
 
   const getStatusBadge = (sale: Sale) => {
-    if (sale.admin_approved) {
-      return <Badge className="bg-success/10 text-success">Approved</Badge>;
-    }
-    if (sale.tl_verified) {
-      return <Badge className="bg-info/10 text-info">TL Verified</Badge>;
-    }
-    return <Badge variant="outline">Pending</Badge>;
+    return sale.is_paid 
+      ? <Badge className="bg-success/10 text-success">Paid</Badge>
+      : <Badge className="bg-warning/10 text-warning">Unpaid</Badge>;
   };
 
   const filteredSales = sales.filter(sale => {
     const matchesSearch = 
-      sale.sale_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.smart_card_number.toLowerCase().includes(searchTerm.toLowerCase());
+      sale.sale_id.toLowerCase().includes(searchTerm.toLowerCase());
     if (statusFilter === 'all') return matchesSearch;
-    if (statusFilter === 'approved') return matchesSearch && sale.admin_approved;
-    if (statusFilter === 'verified') return matchesSearch && sale.tl_verified && !sale.admin_approved;
-    if (statusFilter === 'pending') return matchesSearch && !sale.tl_verified;
+    if (statusFilter === 'approved') return matchesSearch && sale.is_paid;
+    if (statusFilter === 'pending') return matchesSearch && !sale.is_paid;
     return matchesSearch;
   });
 
@@ -155,9 +135,7 @@ export default function DSRMySales({ onNavigate }: DSRMySalesProps) {
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Sale ID</TableHead>
-                    <TableHead>Smartcard</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Price</TableHead>
+                    <TableHead>Has Package</TableHead>
                     <TableHead>Payment</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Date</TableHead>
@@ -167,14 +145,12 @@ export default function DSRMySales({ onNavigate }: DSRMySalesProps) {
                   {filteredSales.map((sale) => (
                     <TableRow key={sale.id}>
                       <TableCell className="font-medium">{sale.sale_id}</TableCell>
-                      <TableCell>{sale.smart_card_number}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{sale.sale_type}</Badge>
+                        <Badge variant={sale.has_package ? "default" : "outline"}>{sale.has_package ? 'Yes' : 'No'}</Badge>
                       </TableCell>
-                      <TableCell>TZS {Number(sale.sale_price).toLocaleString()}</TableCell>
                       <TableCell>
-                        <Badge className={sale.payment_status === 'paid' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}>
-                          {sale.payment_status}
+                        <Badge className={sale.is_paid ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}>
+                          {sale.is_paid ? 'Paid' : 'Unpaid'}
                         </Badge>
                       </TableCell>
                       <TableCell>{getStatusBadge(sale)}</TableCell>
