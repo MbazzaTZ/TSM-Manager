@@ -1067,12 +1067,12 @@ const AdminInventory = () => {
             </div>
             
             {/* Filter by TL */}
-            <Select value={filterByTL} onValueChange={setFilterByTL}>
+            <Select value={filterByTL} onValueChange={(v) => setFilterByTL(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[160px] h-8">
                 <SelectValue placeholder="All TLs" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All TLs</SelectItem>
+                <SelectItem value="all">All TLs</SelectItem>
                 {teamLeaders.map((tl: any) => (
                   <SelectItem key={tl.id} value={tl.id}>{tl.name}</SelectItem>
                 ))}
@@ -1080,12 +1080,12 @@ const AdminInventory = () => {
             </Select>
             
             {/* Filter by Region */}
-            <Select value={filterByRegion} onValueChange={setFilterByRegion}>
+            <Select value={filterByRegion} onValueChange={(v) => setFilterByRegion(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[160px] h-8">
                 <SelectValue placeholder="All Regions" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Regions</SelectItem>
+                <SelectItem value="all">All Regions</SelectItem>
                 {regions.map((region) => (
                   <SelectItem key={region.id} value={region.id}>{region.name}</SelectItem>
                 ))}
@@ -1093,12 +1093,12 @@ const AdminInventory = () => {
             </Select>
             
             {/* Filter by Status */}
-            <Select value={filterByStatus} onValueChange={setFilterByStatus}>
+            <Select value={filterByStatus} onValueChange={(v) => setFilterByStatus(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[140px] h-8">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Status</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="in_store">In Store</SelectItem>
                 <SelectItem value="in_hand">In Hand</SelectItem>
                 <SelectItem value="sold">Sold</SelectItem>
