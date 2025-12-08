@@ -298,5 +298,5 @@ const AdminCreateUser: React.FC = () => {
   );
 };
 
-export default DSRStock;
-export { AdminCreateUser };
+export default AdminCreateUser;
+export { DSRStock };
