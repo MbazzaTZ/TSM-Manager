@@ -127,6 +127,8 @@ const AdminInventory = () => {
     serial_number: "",
     stock_type: "full_set" as StockType,
     region_id: "",
+    assigned_to_tl: null,
+    assigned_to_dsr: null,
   });
 
   // Selection state
@@ -520,7 +522,7 @@ const AdminInventory = () => {
             is_paid: updateStockForm.paymentStatus === "paid",
             package_type: updateStockForm.hasPackage !== "no-package" ? updateStockForm.hasPackage : null,
           });
-        } else if (updateStockForm.stockStatus && updateStockForm.stockStatus !== "") {
+        } else if (typeof updateStockForm.stockStatus === "string" && updateStockForm.stockStatus.length > 0) {
           await bulkUpdateInventory.mutateAsync({
             ids: [updateStockResult.id],
             updates: {
@@ -582,7 +584,7 @@ const AdminInventory = () => {
   };
 
   const resetManualForm = () => {
-    setManualForm({ batch_number: "", smartcard: "", serial_number: "", stock_type: "full_set", region_id: "" });
+    setManualForm({ batch_number: "", smartcard: "", serial_number: "", stock_type: "full_set", region_id: "", assigned_to_tl: null, assigned_to_dsr: null });
   };
 
   const handleManualSubmit = async () => {
@@ -602,6 +604,8 @@ const AdminInventory = () => {
           status: "in_store",
           assigned_to_team_id: null,
           assigned_to_user_id: null,
+          assigned_to_tl: null,
+          assigned_to_dsr: null,
         },
       ]);
       setIsAddDialogOpen(false);
@@ -757,6 +761,8 @@ const AdminInventory = () => {
         status: "in_store" as const,
         assigned_to_team_id: null,
         assigned_to_user_id: null,
+        assigned_to_tl: null,
+        assigned_to_dsr: null,
       };
     });
 
@@ -1858,8 +1864,8 @@ const AdminInventory = () => {
       {stockDetailsId && (
         <StockDetailsModal
           open={stockDetailsModalOpen}
-          onOpenChange={setStockDetailsModalOpen}
-          inventoryId={stockDetailsId}
+          onClose={() => setStockDetailsModalOpen(false)}
+          item={filteredInventory.find((item) => item.id === stockDetailsId) || null}
         />
       )}
     </div>
