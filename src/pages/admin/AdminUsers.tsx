@@ -108,16 +108,16 @@ export default function AdminUsers() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto mt-10 space-y-10">
+    <div className="max-w-5xl mx-auto mt-10 space-y-10 px-2 sm:px-4">
 
 
       {/* Users Table */}
-      <Card className="p-6 rounded-2xl shadow-lg">
-        <div className="flex items-center justify-between mb-6">
+      <Card className="p-2 sm:p-6 rounded-2xl shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <h2 className="text-2xl font-bold">All Users</h2>
           <Input
             placeholder="Search users..."
-            className="w-64"
+            className="w-full sm:w-64"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -127,28 +127,30 @@ export default function AdminUsers() {
         ) : filtered.length === 0 ? (
           <div className="text-center text-muted-foreground py-10">No users found.</div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Mobile</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Created</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map(user => (
-                <TableRow key={user.id}>
-                  <TableCell>{user.full_name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>{user.mobile || "-"}</TableCell>
-                  <TableCell className="capitalize">{user.role.replace("_", " ")}</TableCell>
-                  <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+          <div className="w-full overflow-x-auto">
+            <Table className="min-w-[600px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base">Name</TableHead>
+                  <TableHead className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base">Email</TableHead>
+                  <TableHead className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base">Mobile</TableHead>
+                  <TableHead className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base">Role</TableHead>
+                  <TableHead className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base">Created</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.map(user => (
+                  <TableRow key={user.id}>
+                    <TableCell className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base">{user.full_name}</TableCell>
+                    <TableCell className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base">{user.email}</TableCell>
+                    <TableCell className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base">{user.mobile || "-"}</TableCell>
+                    <TableCell className="capitalize px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base">{user.role.replace("_", " ")}</TableCell>
+                    <TableCell className="px-2 py-1 text-xs sm:px-4 sm:py-2 sm:text-base">{new Date(user.created_at).toLocaleDateString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </Card>
     </div>

@@ -1162,38 +1162,38 @@ const AdminInventory = () => {
         ) : filteredInventory.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">No inventory matches your filters.</div>
         ) : (
-          <div className="overflow-auto">
-            <table className="w-full text-sm">
+          <div className="w-full overflow-x-auto">
+            <table className="min-w-[700px] text-xs sm:text-sm">
               <thead className="bg-secondary/40">
                 <tr>
-                  <th className="p-3 w-12">
+                  <th className="px-2 py-1 w-12 sm:p-3">
                     <Checkbox 
                       checked={isAllSelected} 
                       onCheckedChange={handleSelectAll}
                       aria-label="Select all"
                     />
                   </th>
-                  <th className="p-3 text-left">Smartcard</th>
-                  <th className="p-3 text-left">Serial</th>
-                  <th className="p-3 text-left">Batch</th>
-                  <th className="p-3 text-left">Type</th>
-                  <th className="p-3 text-left">Region</th>
-                  <th className="p-3 text-left">Status</th>
-                  <th className="p-3 text-left">Updated</th>
-                  <th className="p-3 text-right">Actions</th>
+                  <th className="px-2 py-1 text-left sm:p-3">Smartcard</th>
+                  <th className="px-2 py-1 text-left sm:p-3">Serial</th>
+                  <th className="px-2 py-1 text-left sm:p-3">Batch</th>
+                  <th className="px-2 py-1 text-left sm:p-3">Type</th>
+                  <th className="px-2 py-1 text-left sm:p-3">Region</th>
+                  <th className="px-2 py-1 text-left sm:p-3">Status</th>
+                  <th className="px-2 py-1 text-left sm:p-3">Updated</th>
+                  <th className="px-2 py-1 text-right sm:p-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredInventory.map((item) => (
                   <tr key={item.id} className={`border-t border-border/30 ${selectedIds.has(item.id) ? 'bg-primary/5' : ''}`}>
-                    <td className="p-3">
+                    <td className="px-2 py-1 sm:p-3">
                       <Checkbox 
                         checked={selectedIds.has(item.id)} 
                         onCheckedChange={() => handleSelectOne(item.id)}
                         aria-label={`Select ${item.smartcard || item.serial_number}`}
                       />
                     </td>
-                    <td className="p-3 font-mono text-xs md:text-sm">
+                    <td className="px-2 py-1 font-mono text-xs md:text-sm sm:p-3">
                       <span 
                         className="cursor-pointer hover:text-primary transition-colors underline decoration-dotted"
                         onClick={() => {
@@ -1204,17 +1204,17 @@ const AdminInventory = () => {
                         {item.smartcard || "-"}
                       </span>
                     </td>
-                    <td className="p-3 font-mono text-xs md:text-sm text-muted-foreground">{item.serial_number || "-"}</td>
-                    <td className="p-3 font-mono text-xs md:text-sm text-muted-foreground">{item.batch_number || "-"}</td>
-                    <td className="p-3 text-xs md:text-sm">
+                    <td className="px-2 py-1 font-mono text-xs md:text-sm text-muted-foreground sm:p-3">{item.serial_number || "-"}</td>
+                    <td className="px-2 py-1 font-mono text-xs md:text-sm text-muted-foreground sm:p-3">{item.batch_number || "-"}</td>
+                    <td className="px-2 py-1 text-xs md:text-sm sm:p-3">
                       <Badge variant={item.stock_type === "full_set" ? "info" : "secondary"}>{stockTypeLabels[item.stock_type]}</Badge>
                     </td>
-                    <td className="p-3 text-xs md:text-sm text-muted-foreground">{item.regions?.name || "-"}</td>
-                    <td className="p-3 text-xs md:text-sm">
+                    <td className="px-2 py-1 text-xs md:text-sm text-muted-foreground sm:p-3">{item.regions?.name || "-"}</td>
+                    <td className="px-2 py-1 text-xs md:text-sm sm:p-3">
                       <Badge variant={statusBadgeMap[item.status] ?? "available"}>{item.status}</Badge>
                     </td>
-                    <td className="p-3 text-xs text-muted-foreground">{new Date(item.updated_at).toLocaleDateString()}</td>
-                    <td className="p-3 text-right">
+                    <td className="px-2 py-1 text-xs text-muted-foreground sm:p-3">{new Date(item.updated_at).toLocaleDateString()}</td>
+                    <td className="px-2 py-1 text-right sm:p-3">
                       {item.status === "sold" ? (
                         <Badge variant="success" className="inline-flex items-center gap-1">
                           <CheckCircle2 className="h-3.5 w-3.5" /> Sold
