@@ -57,6 +57,9 @@ const Index = () => {
           </div>
 
           <div className="flex justify-center gap-4 mb-8">
+            <Button variant="outline" size="lg" onClick={() => window.location.href = "/login"}>
+              Admin Login
+            </Button>
             <Button variant="outline" size="lg" onClick={() => window.location.href = "/login?role=dsr"}>
               DSR Login
             </Button>
