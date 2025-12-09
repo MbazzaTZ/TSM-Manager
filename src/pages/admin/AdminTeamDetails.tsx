@@ -41,6 +41,61 @@ import {
 import { cn } from "@/lib/utils";
 
 const AdminTeamDetails = () => {
+    // Team target dialog state and logic
+    const [targetDialogOpen, setTargetDialogOpen] = useState(false);
+    const [targetInputs, setTargetInputs] = useState<Record<string, number>>({});
+    // Get sales targets from localStorage
+    let salesTargets: Record<string, number> = {};
+    try {
+      const stored = localStorage.getItem("tsm_sales_targets");
+      salesTargets = stored ? JSON.parse(stored) : {};
+    } catch {
+      salesTargets = {};
+    }
+
+    // Get team members from localStorage (TL/DSR)
+    const localMembers = useMemo(() => {
+      try {
+        const stored = localStorage.getItem("tsm_team_members");
+        const members = stored ? JSON.parse(stored) : [];
+        return members.filter((m: any) => m.team_id === teamId);
+      } catch {
+        return [];
+      }
+    }, [teamId]);
+
+    // Get database users assigned to this team
+    const teamMembers = useMemo(() => {
+      return users?.filter((u) => u.team_id === teamId) || [];
+    }, [users, teamId]);
+
+    // All TLs in this team (from both sources)
+    const allTLs = useMemo(() => {
+      const dbTLs = teamMembers.filter((m) => m.role === "team_leader");
+      const localTLs = localMembers.filter((m: any) => m.role === "team_leader");
+      return [...dbTLs, ...localTLs];
+    }, [teamMembers, localMembers]);
+
+    // Save targets to localStorage
+    const handleSaveTargets = () => {
+      const updated = { ...salesTargets, ...targetInputs };
+      localStorage.setItem("tsm_sales_targets", JSON.stringify(updated));
+      setTargetDialogOpen(false);
+      window.location.reload();
+    };
+
+    // Delete target for a TL
+    const handleDeleteTarget = (tlId: string) => {
+      const updated = { ...salesTargets };
+      delete updated[tlId];
+      localStorage.setItem("tsm_sales_targets", JSON.stringify(updated));
+      setTargetInputs((prev) => {
+        const copy = { ...prev };
+        delete copy[tlId];
+        return copy;
+      });
+      window.location.reload();
+    };
   const { t } = useLanguage();
   const { teamId } = useParams<{ teamId: string }>();
   const navigate = useNavigate();
@@ -61,21 +116,7 @@ const AdminTeamDetails = () => {
     [regions, team]
   );
 
-  // Get team members from localStorage (TL/DSR)
-  const localMembers = useMemo(() => {
-    try {
-      const stored = localStorage.getItem("tsm_team_members");
-      const members = stored ? JSON.parse(stored) : [];
-      return members.filter((m: any) => m.team_id === teamId);
-    } catch {
-      return [];
-    }
-  }, [teamId]);
 
-  // Get database users assigned to this team
-  const teamMembers = useMemo(() => {
-    return users?.filter((u) => u.team_id === teamId) || [];
-  }, [users, teamId]);
 
   // Get all members (combined)
   const allMembers = useMemo(() => {
@@ -103,11 +144,6 @@ const AdminTeamDetails = () => {
 
   // Team stats - calculate based on actual inventory and sales data
   const teamStats = useMemo(() => {
-    // Get TLs in this team from both database and localStorage
-    const dbTLs = teamMembers.filter((m) => m.role === "team_leader");
-    const localTLs = localMembers.filter((m: any) => m.role === "team_leader");
-    const allTLs = [...dbTLs, ...localTLs];
-
     // Get all inventory assigned to this team
     const teamInventory = inventory?.filter((item) => item.assigned_to_team_id === teamId) || [];
 
@@ -126,15 +162,6 @@ const AdminTeamDetails = () => {
     const conversionRate = stockReceived > 0 
       ? Math.round((stockSold / stockReceived) * 100) 
       : 0;
-
-    // Get sales targets and calculate monthly performance
-    let salesTargets: Record<string, number> = {};
-    try {
-      const stored = localStorage.getItem("tsm_sales_targets");
-      salesTargets = stored ? JSON.parse(stored) : {};
-    } catch {
-      salesTargets = {};
-    }
 
     // Monthly target (sum of all TL targets)
     const monthlyTarget = allTLs.reduce((sum: number, tl: any) => {
@@ -164,7 +191,7 @@ const AdminTeamDetails = () => {
       salesGap,
       targetProgress,
     };
-  }, [allMembers, sales, inventory, teamMembers, localMembers, teamId]);
+  }, [allMembers, sales, inventory, teamMembers, localMembers, teamId, allTLs, salesTargets]);
 
   const handleAddMember = async () => {
     if (!selectedUserId) return;
@@ -410,39 +437,6 @@ const AdminTeamDetails = () => {
           </DialogContent>
         </Dialog>
       </div>
-  // Team target dialog state and logic
-  const [targetDialogOpen, setTargetDialogOpen] = useState(false);
-  const [targetInputs, setTargetInputs] = useState<Record<string, number>>({});
-  // Get sales targets from localStorage
-  let salesTargets: Record<string, number> = {};
-  try {
-    const stored = localStorage.getItem("tsm_sales_targets");
-    salesTargets = stored ? JSON.parse(stored) : {};
-  } catch {
-    salesTargets = {};
-  }
-
-  // Save targets to localStorage
-  const handleSaveTargets = () => {
-    const updated = { ...salesTargets, ...targetInputs };
-    localStorage.setItem("tsm_sales_targets", JSON.stringify(updated));
-    setTargetDialogOpen(false);
-    window.location.reload();
-  };
-
-  // Delete target for a TL
-  const handleDeleteTarget = (tlId: string) => {
-    const updated = { ...salesTargets };
-    delete updated[tlId];
-    localStorage.setItem("tsm_sales_targets", JSON.stringify(updated));
-    setTargetInputs((prev) => {
-      const copy = { ...prev };
-      delete copy[tlId];
-      return copy;
-    });
-    window.location.reload();
-  };
-
       {/* Team Members */}
       <div className="glass rounded-xl p-5 border border-border/50">
         <div className="flex items-center justify-between mb-4">

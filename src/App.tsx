@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminCommissionPage from "./pages/admin/AdminCommission";
 import DSRDashboard from "./pages/dsr/DSRDashboard";
 import DSRStock from "./pages/dsr/DSRStock";
 import DSRMySales from "./pages/dsr/DSRMySales";
@@ -31,6 +32,7 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/login" element={<Login />} />
               <Route path="/admin/*" element={<AdminDashboard />} />
+              <Route path="/admin/commission" element={<AdminCommissionPage />} />
               {/* DSR protected routes */}
               <Route path="/dsr/dashboard" element={<RequireRole role="dsr"><DSRDashboard onNavigate={() => {}} /></RequireRole>} />
               <Route path="/dsr/stock" element={<RequireRole role="dsr"><DSRStock onNavigate={() => {}} /></RequireRole>} />

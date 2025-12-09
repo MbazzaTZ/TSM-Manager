@@ -274,3 +274,5 @@ INSERT INTO public.regions (name) VALUES
   ('Mbeya'),
   ('Morogoro'),
   ('Zanzibar');
+
+git add .

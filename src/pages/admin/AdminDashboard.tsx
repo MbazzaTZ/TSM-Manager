@@ -7,7 +7,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { LayoutDashboard, Package, Users, UserPlus, LogOut, AlertTriangle, Home, Menu, X, ShieldCheck, FileBarChart } from "lucide-react";
+import { LayoutDashboard, Package, Users, UserPlus, LogOut, AlertTriangle, Home, Menu, X, ShieldCheck, FileBarChart, DollarSign } from "lucide-react";
 import AdminOverview from "./AdminOverview";
 import AdminInventory from "./AdminInventory";
 import AdminTeams from "./AdminTeams";
@@ -17,6 +17,7 @@ import AdminUnpaid from "./AdminUnpaid";
 import AdminVerification, { getPendingUpdates } from "./AdminVerification";
 import AdminReport from "./AdminReport";
 import AdminCreateUser from "./AdminCreateUser";
+import AdminCommissionPage from "./AdminCommission";
 
 const AdminDashboard = () => {
   const { user, isAdmin, isLoading, signOut } = useAuth();
@@ -49,6 +50,7 @@ const AdminDashboard = () => {
     { path: "/admin/users", label: "Members (TL/DSR)", icon: UserPlus, badge: 0 },
     { path: "/admin/create-user", label: "Create User", icon: UserPlus, badge: 0 },
     { path: "/admin/report", label: "TL Report", icon: FileBarChart, badge: 0 },
+    { path: "/admin/commission", label: "DSR Commission", icon: DollarSign, badge: 0 },
     { path: "/admin/unpaid", label: t("admin.unpaidRecovery"), icon: AlertTriangle, badge: 0 },
   ];
 
@@ -114,6 +116,7 @@ const AdminDashboard = () => {
           <Route path="/users" element={<AdminUsers />} />
           <Route path="/create-user" element={<AdminCreateUser />} />
           <Route path="/report" element={<AdminReport />} />
+          <Route path="/commission" element={<AdminCommissionPage />} />
           <Route path="/unpaid" element={<AdminUnpaid />} />
         </Routes>
       </main>
