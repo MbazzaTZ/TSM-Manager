@@ -52,6 +52,9 @@ import {
   X,
 } from "lucide-react";
 import { addPendingUpdate, getPendingUpdates } from "./AdminVerification";
+import { useUsers } from "@/hooks/useUsers";
+
+import MetricCard from "@/components/MetricCard";
 
 const stockTypeLabels: Record<StockType, string> = {
   full_set: "Full Set",
@@ -89,18 +92,9 @@ const AdminInventory = () => {
   const deleteInventory = useDeleteInventory();
   const createSale = useCreateSale();
 
-  // Get TL/DSR members from localStorage
-  const [members] = useState(() => {
-    try {
-      const stored = localStorage.getItem("tsm_team_members");
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const teamLeaders = members.filter((m: any) => m.role === "team_leader");
-  const dsrs = members.filter((m: any) => m.role === "dsr");
+  const { data: users = [] } = useUsers();
+  const teamLeaders = users.filter((u: any) => u.role === "team_leader");
+  const dsrs = users.filter((u: any) => u.role === "dsr");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterByTL, setFilterByTL] = useState("");
@@ -224,19 +218,23 @@ const AdminInventory = () => {
       const tl = teamLeaders.find((t: any) => t.id === filterByTL);
       if (tl) {
         result = result.filter((item) => 
-          item.assigned_to_tl?.toLowerCase() === tl.name.toLowerCase()
+          item.assigned_to_tl?.toLowerCase() === tl.full_name?.toLowerCase()
         );
       }
     }
     
     // Filter by Region
     if (filterByRegion) {
-      result = result.filter((item) => item.region_id === filterByRegion);
+      result = result.filter((item) => 
+        item.region_id === filterByRegion
+      );
     }
     
     // Filter by Status
     if (filterByStatus) {
-      result = result.filter((item) => item.status === filterByStatus);
+      result = result.filter((item) => 
+        item.status === filterByStatus
+      );
     }
     
     return result;
@@ -294,7 +292,7 @@ const AdminInventory = () => {
     // Store assignment in localStorage for tracking
     const assignments = JSON.parse(localStorage.getItem("tsm_assignments") || "{}");
     Array.from(selectedIds).forEach(id => {
-      assignments[id] = { tl_id: selectedTL, tl_name: tl?.name, assigned_at: new Date().toISOString() };
+      assignments[id] = { tl_id: selectedTL, tl_name: tl?.full_name, assigned_at: new Date().toISOString() };
     });
     localStorage.setItem("tsm_assignments", JSON.stringify(assignments));
 
@@ -318,13 +316,13 @@ const AdminInventory = () => {
       assignments[id] = { 
         ...assignments[id],
         dsr_id: selectedDSR, 
-        dsr_name: dsr?.name, 
+        dsr_name: dsr?.full_name, 
         dsr_assigned_at: new Date().toISOString() 
       };
     });
     localStorage.setItem("tsm_assignments", JSON.stringify(assignments));
 
-    toast({ title: "Assigned to DSR", description: `${selectedIds.size} item(s) assigned to ${dsr?.name}` });
+    toast({ title: "Assigned to DSR", description: `${selectedIds.size} item(s) assigned to ${dsr?.full_name}` });
     setAssignDSRDialogOpen(false);
     setSelectedDSR("");
     clearSelection();
@@ -384,7 +382,7 @@ const AdminInventory = () => {
           assignments[floatingSearchResult.id] = {
             ...assignments[floatingSearchResult.id],
             tl_id: floatingSaleForm.assignToTL,
-            tl_name: tl?.name,
+            tl_name: tl?.full_name,
             assigned_at: new Date().toISOString(),
           };
         }
@@ -393,7 +391,7 @@ const AdminInventory = () => {
           assignments[floatingSearchResult.id] = {
             ...assignments[floatingSearchResult.id],
             dsr_id: floatingSaleForm.assignToDSR,
-            dsr_name: dsr?.name,
+            dsr_name: dsr?.full_name,
             dsr_assigned_at: new Date().toISOString(),
           };
         }
@@ -497,7 +495,7 @@ const AdminInventory = () => {
             assignments[updateStockResult.id] = {
               ...assignments[updateStockResult.id],
               tl_id: updateStockForm.assignToTL,
-              tl_name: tl?.name,
+              tl_name: tl?.full_name,
               assigned_at: new Date().toISOString(),
             };
           }
@@ -505,7 +503,7 @@ const AdminInventory = () => {
             assignments[updateStockResult.id] = {
               ...assignments[updateStockResult.id],
               dsr_id: updateStockForm.assignToDSR,
-              dsr_name: dsr?.name,
+              dsr_name: dsr?.full_name,
               dsr_assigned_at: new Date().toISOString(),
             };
           }
@@ -551,9 +549,9 @@ const AdminInventory = () => {
           paymentStatus: updateStockForm.stockStatus === "sold" ? updateStockForm.paymentStatus : undefined,
           hasPackage: updateStockForm.stockStatus === "sold" ? updateStockForm.hasPackage : undefined,
           assignToTL: updateStockForm.assignToTL !== "none" ? updateStockForm.assignToTL : undefined,
-          assignTLName: tl?.name,
+          assignTLName: tl?.full_name,
           assignToDSR: updateStockForm.assignToDSR !== "none" ? updateStockForm.assignToDSR : undefined,
-          assignDSRName: dsr?.name,
+          assignDSRName: dsr?.full_name,
           customerPhone: updateStockForm.customerPhone || undefined,
         },
         requestedBy: user.id,
@@ -584,7 +582,15 @@ const AdminInventory = () => {
   };
 
   const resetManualForm = () => {
-    setManualForm({ batch_number: "", smartcard: "", serial_number: "", stock_type: "full_set", region_id: "", assigned_to_tl: null, assigned_to_dsr: null });
+    setManualForm({ 
+      batch_number: "", 
+      smartcard: "", 
+      serial_number: "", 
+      stock_type: "full_set", 
+      region_id: "", 
+      assigned_to_tl: null, 
+      assigned_to_dsr: null 
+    });
   };
 
   const handleManualSubmit = async () => {
@@ -674,18 +680,19 @@ const AdminInventory = () => {
         }
 
         const rawHeaders = parseCsvLine(lines[0]).map((header) => header.toLowerCase());
-        const headerAliases: Record<string, string[]> = {
-          batch_number: ["batch_number", "batch", "batch number"],
-          smartcard: ["smartcard", "smartcard_number", "smart card"],
-          serial_number: ["serial_number", "serial", "serial number"],
-          stock_type: ["stock_type", "type"],
-          region: ["region", "region_id", "region name"],
+        
+        const headerAliases = {
+          batch_number: ["batch_number", "batch", "batch no", "batch no.", "batch#"],
+          smartcard: ["smartcard", "smart card", "card", "smartcard number", "smartcard no"],
+          serial_number: ["serial_number", "serial", "serial number", "serial no", "serial#"],
+          stock_type: ["stock_type", "stock type", "type", "product type", "product_type"],
+          region: ["region", "location", "area", "mkoa"],
         };
 
         const getValue = (row: string[], key: keyof typeof headerAliases) => {
           for (const alias of headerAliases[key]) {
-            const index = rawHeaders.indexOf(alias);
-            if (index !== -1) {
+            const index = rawHeaders.indexOf(alias.toLowerCase());
+            if (index !== -1 && index < row.length) {
               return row[index] ?? "";
             }
           }
@@ -823,13 +830,34 @@ const AdminInventory = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{t("admin.inventory")}</h1>
-          <p className="text-muted-foreground text-sm">Track incoming stock, assignments, and sales conversions.</p>
+    <>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{t("admin.inventory")}</h1>
+            <p className="text-muted-foreground text-sm">Track incoming stock, assignments, and sales conversions.</p>
+          </div>
+          <div className="text-right text-sm text-muted-foreground">
+            <p>Last updated</p>
+            <p className="font-medium text-foreground">{new Date().toLocaleString()}</p>
+          </div>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2">
+
+        {/* KPI Metrics - glass grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <MetricCard
+            title="Total Stock"
+            value={totalStock}
+            icon={Package}
+            variant="primary"
+          />
+          <MetricCard title="Available" value={totalAvailable} icon={Package} variant="info" />
+          <MetricCard title="In Field" value={totalInHand} icon={Package} variant="warning" />
+          <MetricCard title="Sold" value={totalSold} icon={CheckCircle2} variant="success" />
+        </div>
+
+        {/* ...existing code for dialogs and actions... */}
           <Dialog open={isBulkDialogOpen} onOpenChange={(open) => {
             setIsBulkDialogOpen(open);
             if (!open) {
@@ -1019,9 +1047,8 @@ const AdminInventory = () => {
             </DialogContent>
           </Dialog>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="glass rounded-xl border border-border/50 p-4">
           <p className="text-sm text-muted-foreground">Total Stock</p>
           <p className="text-2xl font-bold text-foreground">{totalStock}</p>
@@ -1044,7 +1071,7 @@ const AdminInventory = () => {
         </div>
       </div>
 
-      <div className="glass rounded-xl border border-border/50">
+      <div className="glass rounded-xl border border-border/50 p-4">
         <div className="flex flex-col gap-3 border-b border-border/50 p-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1066,7 +1093,7 @@ const AdminInventory = () => {
           </div>
 
           {/* Filters Row */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="glass rounded-xl border border-border/50 p-4 mb-4 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Filter className="h-4 w-4" />
               <span>Filter:</span>
@@ -1080,7 +1107,7 @@ const AdminInventory = () => {
               <SelectContent>
                 <SelectItem value="all">All TLs</SelectItem>
                 {teamLeaders.map((tl: any) => (
-                  <SelectItem key={tl.id} value={tl.id}>{tl.name}</SelectItem>
+                  <SelectItem key={tl.id} value={tl.id}>{tl.full_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1131,7 +1158,7 @@ const AdminInventory = () => {
 
           {/* Bulk Actions */}
           {selectedIds.size > 0 && (
-            <div className="flex flex-wrap items-center gap-2 p-3 bg-secondary/30 rounded-lg">
+            <div className="glass rounded-xl border border-border/50 p-4 flex flex-wrap items-center gap-4">
               <span className="text-sm font-medium mr-2">{selectedIds.size} selected:</span>
               
               <Button size="sm" variant="outline" className="gap-2" onClick={() => setAssignTLDialogOpen(true)}>
@@ -1342,7 +1369,7 @@ const AdminInventory = () => {
                   ) : (
                     teamLeaders.map((tl: any) => (
                       <SelectItem key={tl.id} value={tl.id}>
-                        {tl.name} {tl.phone && `(${tl.phone})`}
+                        {tl.full_name} {tl.phone && `(${tl.phone})`}
                       </SelectItem>
                     ))
                   )}
@@ -1396,7 +1423,7 @@ const AdminInventory = () => {
                   ) : (
                     dsrs.map((dsr: any) => (
                       <SelectItem key={dsr.id} value={dsr.id}>
-                        {dsr.name} {dsr.phone && `(${dsr.phone})`}
+                        {dsr.full_name} {dsr.phone && `(${dsr.phone})`}
                       </SelectItem>
                     ))
                   )}
@@ -1521,7 +1548,7 @@ const AdminInventory = () => {
                                 <SelectItem value="none">-- None --</SelectItem>
                                 {teamLeaders.map((tl: any) => (
                                   <SelectItem key={tl.id} value={tl.id}>
-                                    {tl.name}
+                                    {tl.full_name}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1538,7 +1565,7 @@ const AdminInventory = () => {
                                 <SelectItem value="none">-- None --</SelectItem>
                                 {dsrs.map((dsr: any) => (
                                   <SelectItem key={dsr.id} value={dsr.id}>
-                                    {dsr.name}
+                                    {dsr.full_name}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1735,7 +1762,7 @@ const AdminInventory = () => {
                             <SelectItem value="none">-- None --</SelectItem>
                             {teamLeaders.map((tl: any) => (
                               <SelectItem key={tl.id} value={tl.id}>
-                                {tl.name}
+                                {tl.full_name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1745,14 +1772,14 @@ const AdminInventory = () => {
                       <div className="grid gap-2">
                         <Label className="text-xs">Assign to DSR</Label>
                         <Select value={updateStockForm.assignToDSR} onValueChange={(v) => setUpdateStockForm(f => ({ ...f, assignToDSR: v }))}>
-                          <SelectTrigger className="h-9">
+                                                   <SelectTrigger className="h-9">
                             <SelectValue placeholder="Select DSR (optional)" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">-- None --</SelectItem>
                             {dsrs.map((dsr: any) => (
                               <SelectItem key={dsr.id} value={dsr.id}>
-                                {dsr.name}
+                                {dsr.full_name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1868,7 +1895,7 @@ const AdminInventory = () => {
           item={filteredInventory.find((item) => item.id === stockDetailsId) || null}
         />
       )}
-    </div>
+    </>
   );
 };
 
