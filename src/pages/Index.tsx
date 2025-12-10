@@ -9,8 +9,10 @@ import SearchResultCard from "@/components/SearchResultCard";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useRealtimeAlerts } from "@/hooks/useRealtime";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
+  const { user, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<any>(null);
   const [notFound, setNotFound] = useState(false);
@@ -57,21 +59,30 @@ const Index = () => {
           </div>
 
           <div className="flex justify-center gap-4 mb-8">
-            <Button variant="outline" size="lg" onClick={() => window.location.href = "/login"}>
-              Admin Login
-            </Button>
-            <Button variant="outline" size="lg" onClick={() => window.location.href = "/login?role=dsr"}>
-              DSR Login
-            </Button>
-            <Button variant="outline" size="lg" onClick={() => window.location.href = "/login?role=tl"}>
-              TL Login
-            </Button>
+            {!user && (
+              <>
+                <Button variant="outline" size="lg" onClick={() => window.location.href = "/login"}>
+                  Admin Login
+                </Button>
+                <Button variant="outline" size="lg" onClick={() => window.location.href = "/login?role=dsr"}>
+                  DSR Login
+                </Button>
+                <Button variant="outline" size="lg" onClick={() => window.location.href = "/login?role=tl"}>
+                  TL Login
+                </Button>
+              </>
+            )}
+            {user && (
+              <Button variant="outline" size="lg" onClick={() => signOut()}>
+                Sign Out
+              </Button>
+            )}
           </div>
 
           <div className="space-y-4 animate-slide-up" style={{ animationDelay: "0.1s" }}>
             <div className="relative">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input variant="search" placeholder={t("search.placeholder")}" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className="pl-14 pr-4" />
+              <Input variant="search" placeholder={t("search.placeholder")} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className="pl-14 pr-4" />
             </div>
             <Button onClick={handleSearch} disabled={!searchQuery.trim() || isSearching} className="w-full" size="xl">
               {isSearching ? <><Sparkles className="w-5 h-5 animate-spin" />{t("search.searching")}</> : <><Search className="w-5 h-5" />{t("search.button")}</>}
