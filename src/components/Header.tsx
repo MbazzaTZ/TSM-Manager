@@ -54,16 +54,28 @@ const Header = () => {
             {user ? (
               <>
                 {isAdmin && (
-                  <Link to="/admin">
-                    <Button
-                      variant={location.pathname.startsWith("/admin") ? "default" : "outline"}
-                      size="sm"
-                      className="gap-2"
-                    >
-                      <Settings className="w-4 h-4" />
-                      Admin
-                    </Button>
-                  </Link>
+                  <>
+                    <Link to="/admin">
+                      <Button
+                        variant={location.pathname.startsWith("/admin") ? "default" : "outline"}
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <Settings className="w-4 h-4" />
+                        Admin
+                      </Button>
+                    </Link>
+                    <Link to="/admin/commission">
+                      <Button
+                        variant={location.pathname === "/admin/commission" ? "default" : "outline"}
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <Settings className="w-4 h-4" />
+                        Admin Commission
+                      </Button>
+                    </Link>
+                  </>
                 )}
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
                   <LogOut className="w-4 h-4" />
@@ -119,15 +131,26 @@ const Header = () => {
             {user ? (
               <>
                 {isAdmin && (
-                  <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>
-                    <Button
-                      variant={location.pathname.startsWith("/admin") ? "default" : "outline"}
-                      className="w-full justify-start gap-2"
-                    >
-                      <Settings className="w-4 h-4" />
-                      Admin
-                    </Button>
-                  </Link>
+                  <>
+                    <Link to="/admin" onClick={() => setMobileMenuOpen(false)}>
+                      <Button
+                        variant={location.pathname.startsWith("/admin") ? "default" : "outline"}
+                        className="w-full justify-start gap-2"
+                      >
+                        <Settings className="w-4 h-4" />
+                        Admin
+                      </Button>
+                    </Link>
+                    <Link to="/admin/commission" onClick={() => setMobileMenuOpen(false)}>
+                      <Button
+                        variant={location.pathname === "/admin/commission" ? "default" : "outline"}
+                        className="w-full justify-start gap-2"
+                      >
+                        <Settings className="w-4 h-4" />
+                        Admin Commission
+                      </Button>
+                    </Link>
+                  </>
                 )}
                 <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleLogout}>
                   <LogOut className="w-4 h-4" />
